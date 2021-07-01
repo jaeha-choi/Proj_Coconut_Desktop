@@ -1,14 +1,53 @@
 package util
 
 import (
+	"encoding/binary"
 	"errors"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"io"
+	"net"
 )
 
 const (
 	bufferSize = 4096
 )
+
+// ReadString reads string from a connection
+func ReadString(conn net.Conn) (string, error) {
+	// Read packet size (string size)
+	size, err := readSize(conn)
+	if err != nil {
+		log.Error("Error while reading string size")
+		return "", err
+	}
+	// Read string from the packet
+	str, err := readNString(conn, size)
+	if err != nil {
+		log.Error("Error while reading string")
+		return "", err
+	}
+	return str, nil
+}
+
+// readSize reads first 4 bytes from the reader and convert them into a uint32 value
+func readSize(reader io.Reader) (uint32, error) {
+	// Read first 4 bytes for the size
+	b, err := readNBytes(reader, 4)
+	if err != nil {
+		log.Error("Error while reading packet size")
+		return 0, err
+	}
+	return binary.BigEndian.Uint32(b), nil
+}
+
+// writeSize converts unsigned integer 32 to bytes
+// Take a look at encoding/gob package or protocol buffers for a better performance.
+func writeSize(size uint32) []byte {
+	// consider using array over slice for a better performance i.e: arr := [4]byte{}
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, size)
+	return b
+}
 
 // readNString reads up to nth character. Maximum buffer size does not exceed bufferSize.
 func readNString(reader io.Reader, n uint32) (string, error) {
