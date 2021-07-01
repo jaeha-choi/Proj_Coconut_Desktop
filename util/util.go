@@ -1,6 +1,7 @@
 package util
 
 import (
+	"errors"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"io"
 )
@@ -29,6 +30,10 @@ func readNString(reader io.Reader, n uint32) (string, error) {
 		if totalReceived+buffSize > n {
 			buffer, err = io.ReadAll(io.LimitReader(reader, int64(n-totalReceived)))
 			recv = len(buffer)
+			if totalReceived+uint32(recv) != n {
+				log.Warning("File not fully received")
+				return "", errors.New("unexpected EOF")
+			}
 		} else {
 			recv, err = io.ReadFull(reader, buffer)
 		}
