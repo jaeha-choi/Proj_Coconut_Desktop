@@ -26,7 +26,7 @@ func TestReadNString(t *testing.T) {
 
 func TestReadNStringBufferSize(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("./testdata/log/long_text.txt")
+	file, err := os.Open("../testdata/log/long_text.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
@@ -111,7 +111,7 @@ func TestReadNStringBufferSize(t *testing.T) {
 
 func TestReadNStringBufferSizePlugOne(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("./testdata/log/long_text.txt")
+	file, err := os.Open("../testdata/log/long_text.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
@@ -141,7 +141,7 @@ func TestReadNStringBufferSizePlugOne(t *testing.T) {
 
 func TestReadNStringBufferSizeMinusOne(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("./testdata/log/long_text.txt")
+	file, err := os.Open("../testdata/log/long_text.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
