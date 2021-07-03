@@ -83,6 +83,37 @@ func TestReadBinary(t *testing.T) {
 	}
 }
 
+func TestReadBinaryEmptyFileNSizeError(t *testing.T) {
+	// Use super long text for file name
+	dstFileNFile := "../testdata/util/test_8192.txt"
+	fileNFile, err := os.Open(dstFileNFile)
+	if err != nil {
+		t.Error("Cannot read the input file")
+	}
+	// Close file when done
+	defer func() {
+		if err = fileNFile.Close(); err != nil {
+			t.Error("Input file not properly closed")
+		}
+	}()
+	fileNFileSizeReader := bytes.NewReader(writeSize(8192))
+
+	// Combine all readers
+	readers := io.MultiReader(fileNFileSizeReader, fileNFile)
+
+	err = ReadBinary(readers)
+
+	if err == nil {
+		t.Error("Expected error, but no error was raised.")
+	}
+
+	// Remove downloadPath after testing
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
+	}
+}
+
 func TestReadBinaryEmptyFileNError(t *testing.T) {
 	// Create reader for destination file
 	dstFileN := ""
