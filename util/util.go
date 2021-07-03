@@ -5,28 +5,62 @@ import (
 	"errors"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"io"
-	"net"
+	"io/ioutil"
+	"os"
+	"path/filepath"
 )
 
 const (
-	bufferSize = 4096
+	bufferSize   = 4096
+	downloadPath = "./downloaded"
 )
 
 // ReadString reads string from a connection
-func ReadString(conn net.Conn) (string, error) {
+func ReadString(reader io.Reader) (string, error) {
 	// Read packet size (string size)
-	size, err := readSize(conn)
+	size, err := readSize(reader)
 	if err != nil {
 		log.Error("Error while reading string size")
 		return "", err
 	}
+
+	// ReadString always expect the size to be <= bufferSize
+	if size > bufferSize {
+		log.Error("String size cannot be greater than ", bufferSize)
+		return "", err
+	}
+
 	// Read string from the packet
-	str, err := readNString(conn, size)
+	str, err := readNString(reader, size)
 	if err != nil {
 		log.Error("Error while reading string")
 		return "", err
 	}
 	return str, nil
+}
+
+// ReadBinary reads file name and file content from a connection and save it.
+func ReadBinary(reader io.Reader) error {
+	// Read file name
+	fileN, err := ReadString(reader)
+	if fileN == "" || err != nil {
+		log.Error("Error while reading file name")
+		return err
+	}
+
+	// Read file size
+	size, err := readSize(reader)
+	if err != nil {
+		log.Error("Error while file size")
+		return err
+	}
+
+	// Read file and save
+	if err := readNBinary(reader, size, fileN); err != nil {
+		log.Error("Error while reading/saving binary file")
+		return err
+	}
+	return nil
 }
 
 // readSize reads first 4 bytes from the reader and convert them into a uint32 value
@@ -49,11 +83,14 @@ func writeSize(size uint32) []byte {
 	return b
 }
 
-// readNString reads up to nth character. Maximum buffer size does not exceed bufferSize.
-func readNString(reader io.Reader, n uint32) (string, error) {
+// readNBinary reads up to nth bytes and save it as fileN in downloadPath.
+// Maximum buffer size does not exceed bufferSize.
+// Returns error == nil only if file is fully downloaded, renamed and moved to downloadPath.
+func readNBinary(reader io.Reader, n uint32, fileN string) error {
 	var buffSize uint32
 	var totalReceived uint32 = 0
-	resultString := ""
+	var isDownloadComplete = false
+	var receivedLen int
 
 	if n < bufferSize {
 		buffSize = n
@@ -63,31 +100,73 @@ func readNString(reader io.Reader, n uint32) (string, error) {
 
 	buffer := make([]byte, buffSize)
 
-	var recv int
-	var err error
+	// Create temporary file for downloading
+	tmpFile, err := ioutil.TempFile("", "tmp_download_")
+	if err != nil {
+		log.Error("Temp file could not be opened")
+	}
+
+	// Close and delete temp file when done
+	defer func(name string) {
+		if !isDownloadComplete {
+			if err := tmpFile.Close(); err != nil {
+				log.Error("Error while closing the file.")
+			}
+			// Disable this statement to prevent the program from deleting
+			// the file after testing
+			if err := os.Remove(name); err != nil {
+				log.Error("Error while removing temp file. Temp file at: ", name)
+			}
+		}
+	}(tmpFile.Name())
+
+	// Repeat downloading until the file is fully received
 	for totalReceived < n {
 		if totalReceived+buffSize > n {
 			buffer, err = io.ReadAll(io.LimitReader(reader, int64(n-totalReceived)))
-			recv = len(buffer)
-			if totalReceived+uint32(recv) != n {
-				log.Warning("File not fully received")
-				return "", errors.New("unexpected EOF")
+			receivedLen = len(buffer)
+			// If reader contains less than expected n
+			if totalReceived+uint32(receivedLen) != n {
+				log.Error("File not fully received")
+				return errors.New("unexpected EOF")
 			}
 		} else {
-			recv, err = io.ReadFull(reader, buffer)
+			receivedLen, err = io.ReadFull(reader, buffer)
 		}
 		if err != nil {
-			log.Warning("Error while receiving string")
-			return "", err
+			log.Error("Error while receiving bytes")
+			return err
 		}
-		resultString += string(buffer)
-		totalReceived += uint32(recv)
+		writtenLen, err := tmpFile.Write(buffer)
+
+		// If error encountered while writing a file, close then delete tmp file.
+		if writtenLen != receivedLen || err != nil {
+			log.Error("Error while writing to a file")
+			return err
+		}
+		totalReceived += uint32(receivedLen)
 	}
-	return resultString, nil
+	isDownloadComplete = true
+
+	// Close I/O operation for temporary file
+	if err := tmpFile.Close(); err != nil {
+		log.Error("Error while closing temp file.")
+		return err
+	}
+
+	// Move temporary file to download directory (downloadPath)
+	if err := os.Rename(tmpFile.Name(), filepath.Join(downloadPath, fileN)); err != nil {
+		log.Error("Error moving the temp file to download path")
+		if err := os.Remove(tmpFile.Name()); err != nil {
+			log.Error("Error while removing temp file. Temp file at: ", tmpFile.Name())
+		}
+		return err
+	}
+	return nil
 }
 
-// readNString2 is similar to readNString except that there is no limit on buffer size.
-func readNString2(reader io.Reader, n uint32) (string, error) {
+// readNString reads up to nth character. Maximum length should not exceed bufferSize.
+func readNString(reader io.Reader, n uint32) (string, error) {
 	buffer, err := readNBytes(reader, n)
 	return string(buffer), err
 }
