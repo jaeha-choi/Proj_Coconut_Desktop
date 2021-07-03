@@ -44,7 +44,7 @@ func TestReadStringSizeError(t *testing.T) {
 
 func TestReadStringSizeMax(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/log/test_4096.txt")
+	file, err := os.Open("../testdata/util/test_4096.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
@@ -86,7 +86,7 @@ func TestReadStringSizeMax(t *testing.T) {
 
 func TestReadStringSizeExceedMax(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/log/test_8192.txt")
+	file, err := os.Open("../testdata/util/test_8192.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
@@ -238,7 +238,7 @@ func TestReadNString(t *testing.T) {
 
 func TestReadNStringBufferSize(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/log/test_4096.txt")
+	file, err := os.Open("../testdata/util/test_4096.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
@@ -323,7 +323,7 @@ func TestReadNStringBufferSize(t *testing.T) {
 
 func TestReadNStringMaxSizePlugOne(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/log/test_4096.txt")
+	file, err := os.Open("../testdata/util/test_4096.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
@@ -353,7 +353,7 @@ func TestReadNStringMaxSizePlugOne(t *testing.T) {
 
 func TestReadNStringBufferSizeMinusOne(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/log/test_4096.txt")
+	file, err := os.Open("../testdata/util/test_4096.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
