@@ -13,7 +13,7 @@ import (
 	"testing"
 )
 
-func TestInit(t *testing.T) {
+func init() {
 	log.Init(os.Stdout, log.DEBUG)
 }
 
@@ -252,20 +252,6 @@ func TestReadNStringBufferSize(t *testing.T) {
 		}
 	}()
 
-	// Get sha-1 sum of original file
-	h := sha1.New()
-	if _, err := io.Copy(h, file); err != nil {
-		t.Error("Error while getting shasum")
-	}
-	f1Hash := fmt.Sprintf("%x", h.Sum(nil))
-	log.Info("Hash for input file: ", f1Hash)
-
-	// Reset reader offset since the file was already read once
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		t.Error("Error while resetting reader offset")
-	}
-
 	// Test readNString
 	reader := bufio.NewReader(file)
 	s, err := readNString(reader, 4096)
@@ -303,20 +289,18 @@ func TestReadNStringBufferSize(t *testing.T) {
 	}
 
 	// Reset reader offset since the file was already read once
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		t.Error("Error while resetting reader offset")
+	}
+
+	// Reset reader offset since the file was already read once
 	_, err = tmpFile.Seek(0, 0)
 	if err != nil {
 		t.Error("Error while setting reader offset")
 	}
 
-	// Get sha-1 sum of output file
-	h2 := sha1.New()
-	if _, err := io.Copy(h2, tmpFile); err != nil {
-		t.Error("Error while getting shasum")
-	}
-	f2Hash := fmt.Sprintf("%x", h2.Sum(nil))
-	log.Info("Hash for output file: ", f2Hash)
-
-	if f1Hash != f2Hash {
+	if !ChecksumCompareHelper(t, file, tmpFile) {
 		t.Error("checksum does not match")
 	}
 }
@@ -367,37 +351,20 @@ func TestReadNStringBufferSizeMinusOne(t *testing.T) {
 		}
 	}()
 
-	inputReader := io.LimitReader(file, 4095)
-
-	// Get sha-1 sum of original file
-	h := sha1.New()
-	if _, err := io.Copy(h, inputReader); err != nil {
-		t.Error("Error while getting shasum")
-	}
-	f1Hash := fmt.Sprintf("%x", h.Sum(nil))
-	log.Info("Hash for input file: ", f1Hash)
-
-	// Reset reader offset since the file was already read once
-	_, err = file.Seek(0, 0)
-	if err != nil {
-		t.Error("Error while resetting reader offset")
-	}
-
 	// Test readNString
 	reader := bufio.NewReader(file)
 	s, _ := readNString(reader, 4095)
 
 	tmpReader := strings.NewReader(s[:4095])
 
-	// Get sha-1 sum of output file
-	h2 := sha1.New()
-	if _, err := io.Copy(h2, tmpReader); err != nil {
-		t.Error("Error while getting shasum")
+	// Reset reader offset since the file was already read once
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		t.Error("Error while resetting reader offset")
 	}
-	f2Hash := fmt.Sprintf("%x", h2.Sum(nil))
-	log.Info("Hash for output: ", f2Hash)
+	inputReader := io.LimitReader(file, 4095)
 
-	if f1Hash != f2Hash {
+	if !ChecksumCompareHelper(t, inputReader, tmpReader) {
 		t.Error("checksum does not match")
 	}
 }
@@ -437,4 +404,29 @@ func TestIntToUint32(t *testing.T) {
 	if val != 27532 || err != nil {
 		t.Error("Error during conversion")
 	}
+}
+
+func ChecksumCompareHelper(t *testing.T, expected io.Reader, result io.Reader) bool {
+	t.Helper()
+
+	// Get sha-1 sum of original
+	h := sha1.New()
+	if _, err := io.Copy(h, expected); err != nil {
+		t.Error("Error while getting sha1sum for 'expected' reader")
+	}
+	f1Hash := fmt.Sprintf("%x", h.Sum(nil))
+	log.Info("Expected sha1sum: ", f1Hash)
+
+	// Get sha-1 sum of result
+	h2 := sha1.New()
+	if _, err := io.Copy(h2, result); err != nil {
+		t.Error("Error while getting sha1sum for 'result' reader")
+	}
+	f2Hash := fmt.Sprintf("%x", h2.Sum(nil))
+	log.Info("Resulted sha1sum: ", f2Hash)
+
+	if f1Hash != f2Hash {
+		return false
+	}
+	return true
 }
