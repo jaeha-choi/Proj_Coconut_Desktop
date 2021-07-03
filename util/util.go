@@ -12,6 +12,7 @@ import (
 
 const (
 	bufferSize   = 4096
+	uint32Max    = 4294967295
 	downloadPath = "./downloaded"
 )
 
@@ -180,4 +181,13 @@ func readNBytes(reader io.Reader, n uint32) ([]byte, error) {
 	buffer := make([]byte, n)
 	_, err := io.ReadFull(reader, buffer)
 	return buffer, err
+}
+
+// IntToUint32 converts integer value to uint32. Returns error if value occurs overflow
+func IntToUint32(n int) (uint32, error) {
+	if n < 0 || n > uint32Max {
+		log.Error("value ", n, " overflows uint32")
+		return 0, errors.New("value overflows uint32")
+	}
+	return uint32(n), nil
 }
