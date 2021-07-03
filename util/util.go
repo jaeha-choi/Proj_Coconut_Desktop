@@ -21,6 +21,7 @@ func ReadString(reader io.Reader) (string, error) {
 	// Read packet size (string size)
 	size, err := readSize(reader)
 	if err != nil {
+		log.Debug(err)
 		log.Error("Error while reading string size")
 		return "", err
 	}
@@ -34,6 +35,7 @@ func ReadString(reader io.Reader) (string, error) {
 	// Read string from the packet
 	str, err := readNString(reader, size)
 	if err != nil {
+		log.Debug(err)
 		log.Error("Error while reading string")
 		return "", err
 	}
@@ -45,6 +47,7 @@ func ReadBinary(reader io.Reader) error {
 	// Read file name
 	fileN, err := ReadString(reader)
 	if fileN == "" || err != nil {
+		log.Debug(err)
 		log.Error("Error while reading file name")
 		return err
 	}
@@ -52,12 +55,14 @@ func ReadBinary(reader io.Reader) error {
 	// Read file size
 	size, err := readSize(reader)
 	if err != nil {
+		log.Debug(err)
 		log.Error("Error while file size")
 		return err
 	}
 
 	// Read file and save
 	if err := readNBinary(reader, size, fileN); err != nil {
+		log.Debug(err)
 		log.Error("Error while reading/saving binary file")
 		return err
 	}
@@ -69,6 +74,7 @@ func readSize(reader io.Reader) (uint32, error) {
 	// Read first 4 bytes for the size
 	b, err := readNBytes(reader, 4)
 	if err != nil {
+		log.Debug(err)
 		log.Error("Error while reading packet size")
 		return 0, err
 	}
@@ -101,9 +107,17 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 
 	buffer := make([]byte, buffSize)
 
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(downloadPath, os.ModePerm); err != nil {
+		log.Debug(err)
+		log.Error("Error while creating download directory")
+		return err
+	}
+
 	// Create temporary file for downloading
-	tmpFile, err := ioutil.TempFile("", "tmp_download_")
+	tmpFile, err := ioutil.TempFile(downloadPath, ".tmp_download_")
 	if err != nil {
+		log.Debug(err)
 		log.Error("Temp file could not be opened")
 	}
 
@@ -111,11 +125,12 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 	defer func(name string) {
 		if !isDownloadComplete {
 			if err := tmpFile.Close(); err != nil {
+				log.Debug(err)
 				log.Error("Error while closing the file.")
 			}
-			// Disable this statement to prevent the program from deleting
-			// the file after testing
+			// Delete file if not renamed
 			if err := os.Remove(name); err != nil {
+				log.Debug(err)
 				log.Error("Error while removing temp file. Temp file at: ", name)
 			}
 		}
@@ -134,14 +149,18 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 		} else {
 			receivedLen, err = io.ReadFull(reader, buffer)
 		}
+
 		if err != nil {
+			log.Debug(err)
 			log.Error("Error while receiving bytes")
 			return err
 		}
+
 		writtenLen, err := tmpFile.Write(buffer)
 
 		// If error encountered while writing a file, close then delete tmp file.
 		if writtenLen != receivedLen || err != nil {
+			log.Debug(err)
 			log.Error("Error while writing to a file")
 			return err
 		}
@@ -151,14 +170,17 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 
 	// Close I/O operation for temporary file
 	if err := tmpFile.Close(); err != nil {
+		log.Debug(err)
 		log.Error("Error while closing temp file.")
 		return err
 	}
 
 	// Move temporary file to download directory (downloadPath)
 	if err := os.Rename(tmpFile.Name(), filepath.Join(downloadPath, fileN)); err != nil {
+		log.Debug(err)
 		log.Error("Error moving the temp file to download path")
 		if err := os.Remove(tmpFile.Name()); err != nil {
+			log.Debug(err)
 			log.Error("Error while removing temp file. Temp file at: ", tmpFile.Name())
 		}
 		return err
