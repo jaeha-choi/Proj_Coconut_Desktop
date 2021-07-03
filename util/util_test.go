@@ -170,6 +170,65 @@ func TestReadNBinaryCreateDirError(t *testing.T) {
 	}
 }
 
+func TestReadNBinaryTinyWrongSize(t *testing.T) {
+	testFileN := "../testdata/util/pine_cone.jpg"
+	resultFileN := "pine_cone_result.jpg"
+
+	// Open original image
+	imgFile, err := os.Open(testFileN)
+	if imgFile == nil || err != nil {
+		t.Error("Error opening image file")
+		return // imgFile == nil
+	}
+	defer func() {
+		if err := imgFile.Close(); err != nil {
+			t.Error("Error while closing image file")
+		}
+	}()
+
+	// To get the size of the input image
+	imgFileStat, err := imgFile.Stat()
+	if imgFileStat == nil || err != nil {
+		t.Error("Error while getting image file stats")
+		return // imgFileStat == nil
+	}
+
+	err = readNBinary(imgFile, uint32(imgFileStat.Size()+1), resultFileN)
+	if err == nil {
+		t.Error("Expected error, but no error was raised.")
+	}
+}
+
+func TestReadNBinaryTinyWrongSize2(t *testing.T) {
+	testFileN := "../testdata/util/cat.jpg"
+	resultFileN := "cat_result.jpg"
+
+	// Open original image
+	imgFile, err := os.Open(testFileN)
+	if imgFile == nil || err != nil {
+		t.Error("Error opening image file")
+		return // imgFile == nil
+	}
+	defer func() {
+		if err := imgFile.Close(); err != nil {
+			t.Error("Error while closing image file")
+		}
+	}()
+
+	// To get the size of the input image
+	imgFileStat, err := imgFile.Stat()
+	if imgFileStat == nil || err != nil {
+		t.Error("Error while getting image file stats")
+		return // imgFileStat == nil
+	}
+	log.Debug(imgFileStat.Size())
+	partial := io.LimitReader(imgFile, 51283)
+	err = readNBinary(partial, uint32(imgFileStat.Size()), resultFileN)
+	if err == nil {
+		t.Error("Expected error, but no error was raised.")
+	}
+}
+
 func TestReadString(t *testing.T) {
 	testStr := "test this"
 
