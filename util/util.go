@@ -46,17 +46,21 @@ func ReadString(reader io.Reader) (string, error) {
 func ReadBinary(reader io.Reader) error {
 	// Read file name
 	fileN, err := ReadString(reader)
-	if fileN == "" || err != nil {
+	if err != nil {
 		log.Debug(err)
 		log.Error("Error while reading file name")
 		return err
+	}
+	if fileN == "" {
+		log.Error("File name cannot be empty")
+		return errors.New("empty filename")
 	}
 
 	// Read file size
 	size, err := readSize(reader)
 	if err != nil {
 		log.Debug(err)
-		log.Error("Error while file size")
+		log.Error("Error while reading file size")
 		return err
 	}
 
