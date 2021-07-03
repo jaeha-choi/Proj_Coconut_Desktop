@@ -69,6 +69,57 @@ func TestReadNBinary(t *testing.T) {
 	}
 }
 
+func TestReadNBinaryTiny(t *testing.T) {
+	testFileN := "../testdata/util/pine_cone.jpg"
+	resultFileN := "pine_cone_result.jpg"
+
+	// Open original image
+	imgFile, err := os.Open(testFileN)
+	if imgFile == nil || err != nil {
+		t.Error("Error opening image file")
+		return // imgFile == nil
+	}
+	defer func() {
+		if err := imgFile.Close(); err != nil {
+			t.Error("Error while closing image file")
+		}
+	}()
+
+	// To get the size of the input image
+	imgFileStat, err := imgFile.Stat()
+	if imgFileStat == nil || err != nil {
+		t.Error("Error while getting image file stats")
+		return // imgFileStat == nil
+	}
+
+	err = readNBinary(imgFile, uint32(imgFileStat.Size()), resultFileN)
+	if err != nil {
+		t.Error("Error encountered while reading binary")
+	}
+
+	// Open result image
+	resImgFile, err := os.Open(filepath.Join(downloadPath, resultFileN))
+	if resImgFile == nil || err != nil {
+		t.Error("Error opening image file")
+		return // imgFile == nil
+	}
+	defer func() {
+		if err := resImgFile.Close(); err != nil {
+			t.Error("Error while closing image file")
+		}
+	}()
+
+	// Reset reader offset since the file was already read once
+	_, err = imgFile.Seek(0, 0)
+	if err != nil {
+		t.Error("Error while resetting reader offset")
+	}
+
+	if !ChecksumCompareHelper(t, imgFile, resImgFile) {
+		t.Error("Checksum does not match")
+	}
+}
+
 func TestReadString(t *testing.T) {
 	testStr := "test this"
 
