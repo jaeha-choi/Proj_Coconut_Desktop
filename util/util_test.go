@@ -2,6 +2,7 @@ package util
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/sha1"
 	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
@@ -14,6 +15,104 @@ import (
 
 func TestInit(t *testing.T) {
 	log.Init(os.Stdout, log.DEBUG)
+}
+
+func TestReadSize0(t *testing.T) {
+	inputBytes := make([]byte, 4)
+	// [0 0 0 0]
+	reader := bytes.NewReader(inputBytes)
+	result, err := readSize(reader)
+	if result != 0 || err != nil {
+		t.Error("Error while reading size [0]")
+	}
+}
+
+func TestReadSize255(t *testing.T) {
+	inputBytes := make([]byte, 4)
+	// [0 0 0 255]
+	inputBytes[3] = 255
+	reader := bytes.NewReader(inputBytes)
+	result, err := readSize(reader)
+	if result != 255 || err != nil {
+		t.Error("Error while reading size [255]")
+	}
+}
+
+func TestReadSize4095(t *testing.T) {
+	inputBytes := make([]byte, 4)
+	// [0 0 15 255]
+	inputBytes[2] = 15
+	inputBytes[3] = 255
+	reader := bytes.NewReader(inputBytes)
+	result, err := readSize(reader)
+	if result != 4095 || err != nil {
+		t.Error("Error while reading size [4095]")
+	}
+}
+
+func TestReadSizeMax(t *testing.T) {
+	inputBytes := make([]byte, 4)
+	// [255 255 255 255]
+	inputBytes[0] = 255
+	inputBytes[1] = 255
+	inputBytes[2] = 255
+	inputBytes[3] = 255
+	reader := bytes.NewReader(inputBytes)
+	result, err := readSize(reader)
+	if result != uint32Max || err != nil {
+		t.Error("Error while reading size uint32max")
+	}
+}
+
+func TestWriteSize0(t *testing.T) {
+	result := writeSize(0)
+	expected := make([]byte, 4)
+	// [0 0 0 0]
+	if bytes.Compare(result, expected) != 0 {
+		log.Debug("Result: ", result)
+		log.Debug("Expected: ", expected)
+		t.Error("Incorrect value returned")
+	}
+}
+
+func TestWriteSize255(t *testing.T) {
+	result := writeSize(255)
+	expected := make([]byte, 4)
+	// [0 0 0 255]
+	expected[3] = 255
+	if bytes.Compare(result, expected) != 0 {
+		log.Debug("Result: ", result)
+		log.Debug("Expected: ", expected)
+		t.Error("Incorrect value returned")
+	}
+}
+
+func TestWriteSize4095(t *testing.T) {
+	result := writeSize(4095)
+	expected := make([]byte, 4)
+	// [0 0 15 255]
+	expected[2] = 15
+	expected[3] = 255
+	if bytes.Compare(result, expected) != 0 {
+		log.Debug("Result: ", result)
+		log.Debug("Expected: ", expected)
+		t.Error("Incorrect value returned")
+	}
+}
+
+func TestWriteSizeMax(t *testing.T) {
+	result := writeSize(4294967295)
+	expected := make([]byte, 4)
+	// [255 255 255 255]
+	expected[0] = 255
+	expected[1] = 255
+	expected[2] = 255
+	expected[3] = 255
+	if bytes.Compare(result, expected) != 0 {
+		log.Debug("Result: ", result)
+		log.Debug("Expected: ", expected)
+		t.Error("Incorrect value returned")
+	}
 }
 
 func TestReadNString(t *testing.T) {
@@ -203,5 +302,26 @@ func TestReadNStringExceed(t *testing.T) {
 	_, err := readNString(reader, 50)
 	if err == nil {
 		t.Error("Excepted error, but no error raised.")
+	}
+}
+
+func TestIntToUint32SignedInt(t *testing.T) {
+	val, err := IntToUint32(-1)
+	if val != 0 || err == nil {
+		t.Error("Excepted error, but no error raised.")
+	}
+}
+
+func TestIntToUint32Max(t *testing.T) {
+	val, err := IntToUint32(4294967296)
+	if val != 0 || err == nil {
+		t.Error("Excepted error, but no error raised.")
+	}
+}
+
+func TestIntToUint32(t *testing.T) {
+	val, err := IntToUint32(27532)
+	if val != 27532 || err != nil {
+		t.Error("Error during conversion")
 	}
 }
