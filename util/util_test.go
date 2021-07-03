@@ -17,6 +17,109 @@ func TestInit(t *testing.T) {
 	log.Init(os.Stdout, log.DEBUG)
 }
 
+func TestReadString(t *testing.T) {
+	testStr := "test this"
+
+	sizeBytes := writeSize(uint32(len(testStr)))
+	sizeReader := bytes.NewReader(sizeBytes)
+	strReader := bytes.NewReader([]byte(testStr))
+	reader := io.MultiReader(sizeReader, strReader)
+
+	resultStr, err := ReadString(reader)
+	if resultStr != testStr || err != nil {
+		log.Debug("Result: ", resultStr)
+		log.Debug("Expected: ", testStr)
+		t.Error("Read string returned incorrect result")
+	}
+}
+
+func TestReadStringSizeError(t *testing.T) {
+	sizeBytes := make([]byte, 2)
+	sizeReader := bytes.NewReader(sizeBytes)
+	_, err := ReadString(sizeReader)
+	if err == nil {
+		t.Error("Expected error when reading size, but no error raised.")
+	}
+}
+
+func TestReadStringSizeMax(t *testing.T) {
+	// Open input file for testing
+	file, err := os.Open("../testdata/log/test_4096.txt")
+	if err != nil {
+		t.Error("Cannot read the input file")
+	}
+
+	// Close file when done
+	defer func() {
+		if err = file.Close(); err != nil {
+			t.Error("Input file not properly closed")
+		}
+	}()
+
+	sizeReader := bytes.NewReader(writeSize(4096))
+	reader := io.MultiReader(sizeReader, file)
+
+	result, err := ReadString(reader)
+	if err != nil {
+		t.Error("Error while reading string")
+	}
+
+	// Reset reader offset since the file was already read once
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		t.Error("Error while resetting reader offset")
+	}
+
+	// Read input file as string
+	input, err := io.ReadAll(reader)
+	if err != nil {
+		t.Error("Error while reading from input file")
+	}
+
+	if string(input) != result {
+		log.Debug(string(input))
+		log.Debug("----------------")
+		log.Debug(result)
+		t.Error("Result does not match input")
+	}
+}
+
+func TestReadStringSizeExceedMax(t *testing.T) {
+	// Open input file for testing
+	file, err := os.Open("../testdata/log/test_8192.txt")
+	if err != nil {
+		t.Error("Cannot read the input file")
+	}
+
+	// Close file when done
+	defer func() {
+		if err = file.Close(); err != nil {
+			t.Error("Input file not properly closed")
+		}
+	}()
+	sizeReader := bytes.NewReader(writeSize(8192))
+	reader := io.MultiReader(sizeReader, file)
+
+	_, err = ReadString(reader)
+	if err == nil {
+		t.Error("Expected error, but no error raised.")
+	}
+}
+
+func TestReadStringSizeShortReader(t *testing.T) {
+	testStr := "test this"
+
+	sizeBytes := writeSize(1024)
+	sizeReader := bytes.NewReader(sizeBytes)
+	strReader := bytes.NewReader([]byte(testStr))
+	reader := io.MultiReader(sizeReader, strReader)
+
+	result, err := ReadString(reader)
+	if result != "" || err == nil {
+		t.Error("Expected error, but no error raised.")
+	}
+}
+
 func TestReadSizeError(t *testing.T) {
 	inputBytes := make([]byte, 2)
 	// [0 0]
@@ -135,7 +238,7 @@ func TestReadNString(t *testing.T) {
 
 func TestReadNStringBufferSize(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/log/long_text.txt")
+	file, err := os.Open("../testdata/log/test_4096.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
@@ -220,7 +323,7 @@ func TestReadNStringBufferSize(t *testing.T) {
 
 func TestReadNStringMaxSizePlugOne(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/log/long_text.txt")
+	file, err := os.Open("../testdata/log/test_4096.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
@@ -250,7 +353,7 @@ func TestReadNStringMaxSizePlugOne(t *testing.T) {
 
 func TestReadNStringBufferSizeMinusOne(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/log/long_text.txt")
+	file, err := os.Open("../testdata/log/test_4096.txt")
 	if err != nil {
 		t.Error("Cannot read the input file")
 	}
