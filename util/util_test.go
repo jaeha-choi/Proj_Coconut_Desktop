@@ -17,6 +17,16 @@ func TestInit(t *testing.T) {
 	log.Init(os.Stdout, log.DEBUG)
 }
 
+func TestReadSizeError(t *testing.T) {
+	inputBytes := make([]byte, 2)
+	// [0 0]
+	reader := bytes.NewReader(inputBytes)
+	result, err := readSize(reader)
+	if result != 0 || err == nil {
+		t.Error("Expected error, but no error raised.")
+	}
+}
+
 func TestReadSize0(t *testing.T) {
 	inputBytes := make([]byte, 4)
 	// [0 0 0 0]
@@ -301,21 +311,21 @@ func TestReadNStringExceed(t *testing.T) {
 	reader := strings.NewReader("init 1234 prev 5678 curr next \n")
 	_, err := readNString(reader, 50)
 	if err == nil {
-		t.Error("Excepted error, but no error raised.")
+		t.Error("Expected error, but no error raised.")
 	}
 }
 
 func TestIntToUint32SignedInt(t *testing.T) {
 	val, err := IntToUint32(-1)
 	if val != 0 || err == nil {
-		t.Error("Excepted error, but no error raised.")
+		t.Error("Expected error, but no error raised.")
 	}
 }
 
 func TestIntToUint32Max(t *testing.T) {
 	val, err := IntToUint32(4294967296)
 	if val != 0 || err == nil {
-		t.Error("Excepted error, but no error raised.")
+		t.Error("Expected error, but no error raised.")
 	}
 }
 
