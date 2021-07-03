@@ -18,6 +18,199 @@ func init() {
 	log.Init(os.Stdout, log.DEBUG)
 }
 
+func TestReadBinary(t *testing.T) {
+	// Create reader for destination file
+	dstFileN := "cat_result.jpg"
+	destFileNSizeReader := bytes.NewReader(writeSize(uint32(len(dstFileN))))
+	destFileNReader := bytes.NewReader([]byte(dstFileN))
+
+	// Create reader for source file
+	srcFileN := "../testdata/util/cat.jpg"
+
+	srcFileReader, err := os.Open(srcFileN)
+	if srcFileReader == nil || err != nil {
+		t.Error("Error opening image file")
+		return // imgFile == nil
+	}
+	defer func() {
+		if err := srcFileReader.Close(); err != nil {
+			t.Error("Error while closing image file")
+		}
+	}()
+
+	// To get the size of the input image
+	srcFileStat, err := srcFileReader.Stat()
+	if srcFileStat == nil || err != nil {
+		t.Error("Error while getting image file stats")
+		return // imgFileStat == nil
+	}
+	srcFileSizeReader := bytes.NewReader(writeSize(uint32(srcFileStat.Size())))
+
+	// Combine all readers
+	readers := io.MultiReader(destFileNSizeReader, destFileNReader, srcFileSizeReader, srcFileReader)
+
+	err = ReadBinary(readers)
+
+	if err != nil {
+		t.Error("Error in ReadBinary")
+	}
+
+	// Open result image
+	resImgFile, err := os.Open(filepath.Join(downloadPath, dstFileN))
+	if resImgFile == nil || err != nil {
+		t.Error("Error opening image file")
+		return // imgFile == nil
+	}
+	defer func() {
+		if err := resImgFile.Close(); err != nil {
+			t.Error("Error while closing image file")
+		}
+	}()
+
+	// Reset reader offset since the file was already read once
+	_, err = srcFileReader.Seek(0, 0)
+	if err != nil {
+		t.Error("Error while resetting reader offset")
+	}
+
+	if !ChecksumCompareHelper(t, srcFileReader, resImgFile) {
+		t.Error("Checksum does not match")
+	}
+	// Remove downloadPath after testing
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
+	}
+}
+
+func TestReadBinaryEmptyFileNError(t *testing.T) {
+	// Create reader for destination file
+	dstFileN := ""
+	destFileNSizeReader := bytes.NewReader(writeSize(uint32(len(dstFileN))))
+	destFileNReader := bytes.NewReader([]byte(dstFileN))
+
+	// Create reader for source file
+	srcFileN := "../testdata/util/cat.jpg"
+
+	srcFileReader, err := os.Open(srcFileN)
+	if srcFileReader == nil || err != nil {
+		t.Error("Error opening image file")
+		return // imgFile == nil
+	}
+	defer func() {
+		if err := srcFileReader.Close(); err != nil {
+			t.Error("Error while closing image file")
+		}
+	}()
+
+	// To get the size of the input image
+	srcFileStat, err := srcFileReader.Stat()
+	if srcFileStat == nil || err != nil {
+		t.Error("Error while getting image file stats")
+		return // imgFileStat == nil
+	}
+	srcFileSizeReader := bytes.NewReader(writeSize(uint32(srcFileStat.Size())))
+
+	// Combine all readers
+	readers := io.MultiReader(destFileNSizeReader, destFileNReader, srcFileSizeReader, srcFileReader)
+
+	err = ReadBinary(readers)
+
+	if err == nil {
+		t.Error("Expected error, but no error was raised.")
+	}
+
+	// Remove downloadPath after testing
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
+	}
+}
+
+func TestReadBinaryIncorrectFileSize(t *testing.T) {
+	// Create reader for destination file
+	dstFileN := "cat_result.jpg"
+	destFileNSizeReader := bytes.NewReader(writeSize(uint32(len(dstFileN))))
+	destFileNReader := bytes.NewReader([]byte(dstFileN))
+
+	// Create reader for source file
+	srcFileN := "../testdata/util/cat.jpg"
+
+	srcFileReader, err := os.Open(srcFileN)
+	if srcFileReader == nil || err != nil {
+		t.Error("Error opening image file")
+		return // imgFile == nil
+	}
+	defer func() {
+		if err := srcFileReader.Close(); err != nil {
+			t.Error("Error while closing image file")
+		}
+	}()
+
+	incorrectFileSize := make([]byte, 2)
+	srcFileSizeReader := bytes.NewReader(incorrectFileSize)
+
+	// Combine all readers
+	readers := io.MultiReader(destFileNSizeReader, destFileNReader, srcFileSizeReader)
+
+	err = ReadBinary(readers)
+
+	if err == nil {
+		t.Error("Expected error, but no error was raised.")
+	}
+
+	// Remove downloadPath after testing
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
+	}
+}
+
+func TestReadBinaryShortReader(t *testing.T) {
+	// Create reader for destination file
+	dstFileN := "cat_result.jpg"
+	destFileNSizeReader := bytes.NewReader(writeSize(uint32(len(dstFileN))))
+	destFileNReader := bytes.NewReader([]byte(dstFileN))
+
+	// Create reader for source file
+	srcFileN := "../testdata/util/cat.jpg"
+
+	srcFileReader, err := os.Open(srcFileN)
+	if srcFileReader == nil || err != nil {
+		t.Error("Error opening image file")
+		return // imgFile == nil
+	}
+	defer func() {
+		if err := srcFileReader.Close(); err != nil {
+			t.Error("Error while closing image file")
+		}
+	}()
+
+	// To get the size of the input image
+	srcFileStat, err := srcFileReader.Stat()
+	if srcFileStat == nil || err != nil {
+		t.Error("Error while getting image file stats")
+		return // imgFileStat == nil
+	}
+	srcFileSizeReader := bytes.NewReader(writeSize(uint32(srcFileStat.Size())))
+
+	limitedFile := io.LimitReader(srcFileReader, srcFileStat.Size()-100)
+	// Combine all readers
+	readers := io.MultiReader(destFileNSizeReader, destFileNReader, srcFileSizeReader, limitedFile)
+
+	err = ReadBinary(readers)
+
+	if err == nil {
+		t.Error("Expected error, but no error was raised.")
+	}
+
+	// Remove downloadPath after testing
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
+	}
+}
+
 func TestReadNBinary(t *testing.T) {
 	testFileN := "../testdata/util/cat.jpg"
 	resultFileN := "cat_result.jpg"
@@ -66,6 +259,11 @@ func TestReadNBinary(t *testing.T) {
 
 	if !ChecksumCompareHelper(t, imgFile, resImgFile) {
 		t.Error("Checksum does not match")
+	}
+	// Remove downloadPath after testing
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
 	}
 }
 
@@ -118,6 +316,11 @@ func TestReadNBinaryTiny(t *testing.T) {
 	if !ChecksumCompareHelper(t, imgFile, resImgFile) {
 		t.Error("Checksum does not match")
 	}
+	// Remove downloadPath after testing
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
+	}
 }
 
 func TestReadNBinaryCreateDirError(t *testing.T) {
@@ -164,8 +367,9 @@ func TestReadNBinaryCreateDirError(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error while readNBinary, but no error was raised.")
 	}
-	// Remove file named downloadPath after testing
+	// Remove downloadPath after testing
 	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
 		log.Error("Existing directory not deleted, perhaps it does not exist?")
 	}
 }
@@ -197,6 +401,11 @@ func TestReadNBinaryTinyWrongSize(t *testing.T) {
 	if err == nil {
 		t.Error("Expected error, but no error was raised.")
 	}
+	// Remove downloadPath after testing
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
+	}
 }
 
 func TestReadNBinaryTinyWrongSize2(t *testing.T) {
@@ -226,6 +435,11 @@ func TestReadNBinaryTinyWrongSize2(t *testing.T) {
 	err = readNBinary(partial, uint32(imgFileStat.Size()), resultFileN)
 	if err == nil {
 		t.Error("Expected error, but no error was raised.")
+	}
+	// Remove downloadPath after testing
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
 	}
 }
 
