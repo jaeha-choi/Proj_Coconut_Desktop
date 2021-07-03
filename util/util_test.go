@@ -56,7 +56,7 @@ func TestReadNStringBufferSize(t *testing.T) {
 
 	// Test readNString
 	reader := bufio.NewReader(file)
-	s, err := readNString(reader, 5000)
+	s, err := readNString(reader, 4096)
 	if err != nil {
 		t.Error("readNString returned error")
 	}
@@ -109,7 +109,7 @@ func TestReadNStringBufferSize(t *testing.T) {
 	}
 }
 
-func TestReadNStringBufferSizePlugOne(t *testing.T) {
+func TestReadNStringMaxSizePlugOne(t *testing.T) {
 	// Open input file for testing
 	file, err := os.Open("../testdata/log/long_text.txt")
 	if err != nil {
@@ -133,7 +133,7 @@ func TestReadNStringBufferSizePlugOne(t *testing.T) {
 
 	// Test readNString
 	reader := bufio.NewReader(file)
-	s, err := readNString(reader, 5001)
+	s, err := readNString(reader, 4097)
 	if s != "" || err == nil {
 		t.Error("Expected error, but error was not raised")
 	}
@@ -155,7 +155,7 @@ func TestReadNStringBufferSizeMinusOne(t *testing.T) {
 		}
 	}()
 
-	inputReader := io.LimitReader(file, 4999)
+	inputReader := io.LimitReader(file, 4095)
 
 	// Get sha-1 sum of original file
 	h := sha1.New()
@@ -173,9 +173,9 @@ func TestReadNStringBufferSizeMinusOne(t *testing.T) {
 
 	// Test readNString
 	reader := bufio.NewReader(file)
-	s, _ := readNString(reader, 4999)
+	s, _ := readNString(reader, 4095)
 
-	tmpReader := strings.NewReader(s[:4999])
+	tmpReader := strings.NewReader(s[:4095])
 
 	// Get sha-1 sum of output file
 	h2 := sha1.New()

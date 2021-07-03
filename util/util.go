@@ -167,6 +167,10 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 
 // readNString reads up to nth character. Maximum length should not exceed bufferSize.
 func readNString(reader io.Reader, n uint32) (string, error) {
+	if n > bufferSize {
+		log.Error("n should be smaller than ", bufferSize)
+		return "", errors.New("parameter value error")
+	}
 	buffer, err := readNBytes(reader, n)
 	return string(buffer), err
 }
