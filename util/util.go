@@ -27,8 +27,8 @@ func ReadString(reader io.Reader) (string, error) {
 
 	// ReadString always expect the size to be <= bufferSize
 	if size > bufferSize {
-		log.Error("String size cannot be greater than ", bufferSize)
-		return "", err
+		log.Error("String size cannot be greater than ", bufferSize, ". String size: ", size)
+		return "", errors.New("size exceeded")
 	}
 
 	// Read string from the packet
