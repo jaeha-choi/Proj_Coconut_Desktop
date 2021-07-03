@@ -120,6 +120,56 @@ func TestReadNBinaryTiny(t *testing.T) {
 	}
 }
 
+func TestReadNBinaryCreateDirError(t *testing.T) {
+	testFileN := "../testdata/util/cat.jpg"
+	resultFileN := "cat_result.jpg"
+
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Debug(err)
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
+	}
+
+	// Open original image
+	imgFile, err := os.Open(testFileN)
+	if imgFile == nil || err != nil {
+		t.Error("Error opening image file")
+		return // imgFile == nil
+	}
+	defer func() {
+		if err := imgFile.Close(); err != nil {
+			t.Error("Error while closing image file")
+		}
+	}()
+
+	// To get the size of the input image
+	imgFileStat, err := imgFile.Stat()
+	if imgFileStat == nil || err != nil {
+		t.Error("Error while getting image file stats")
+		return // imgFileStat == nil
+	}
+
+	// Create new file to prevent downloaded directory from being created
+	newFileN := downloadPath
+	newFile, err := os.Create(newFileN)
+	if newFile == nil || err != nil {
+		log.Debug(err)
+		t.Error("Error while creating a file")
+		return // newFile != nil
+	}
+	if err := newFile.Close(); err != nil {
+		t.Error("Error while creating a file")
+	}
+
+	err = readNBinary(imgFile, uint32(imgFileStat.Size()), resultFileN)
+	if err == nil {
+		t.Error("Expected error while readNBinary, but no error was raised.")
+	}
+	// Remove file named downloadPath after testing
+	if err := os.RemoveAll(downloadPath); err != nil {
+		log.Error("Existing directory not deleted, perhaps it does not exist?")
+	}
+}
+
 func TestReadString(t *testing.T) {
 	testStr := "test this"
 
