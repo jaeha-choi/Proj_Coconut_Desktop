@@ -73,6 +73,97 @@ func ReadBinary(reader io.Reader) error {
 	return nil
 }
 
+// WriteString writes msg to writer
+// length of msg cannot exceed bufferSize
+// Returns total bytes sent and error, if any.
+// err == nil only if length of sent bytes = length of msg
+func WriteString(writer io.Writer, msg *string) (int, error) {
+	// Return error if msg is too big
+	if len(*msg) > bufferSize {
+		log.Error("String should contain less than ", bufferSize, " characters")
+		return 0, errors.New("size exceeded")
+	}
+
+	// Write size of the string to writer
+	if err := writeSize(writer, uint32(len(*msg))); err != nil {
+		log.Debug(err)
+		log.Error("Error while writing string size")
+		return 0, err
+	}
+
+	// Write msg to writer
+	writtenSize, err := writer.Write([]byte(*msg))
+	if writtenSize != len(*msg) || err != nil {
+		log.Debug(err)
+		log.Error("Error while writing string")
+		return writtenSize, err
+	}
+	return writtenSize, err
+}
+
+// WriteBinary opens file and writes byte data to writer.
+// Returns total length of bytes sent, and error. err == nil only if
+// total bytes sent = file size.
+// writer is likely to be net.Conn. File size cannot exceed max value of uint32
+// as of now. We can split files or change the data type to uint64 if time allows.
+func WriteBinary(writer io.Writer, filePath *string) (uint32, error) {
+	// Open source file to send
+	srcFile, err := os.Open(*filePath)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while opening source file")
+		return 0, err
+	}
+	// Close src file when done
+	defer func() {
+		if err := srcFile.Close(); err != nil {
+			log.Debug(err)
+			log.Error("Error while closing file")
+		}
+	}()
+
+	// Get stat of the file
+	srcFileStat, err := srcFile.Stat()
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while fetching stats for source file")
+		return 0, err
+	}
+
+	// If file is too big to send, return error.
+	srcFileSize, err := IntToUint32(srcFileStat.Size())
+	if err != nil {
+		log.Debug(err)
+		log.Error("File exceeds size limit")
+		return 0, err
+	}
+
+	// Only preserve file name instead of passing directory + file name
+	_, fileN := filepath.Split(*filePath)
+
+	// Send file name
+	if _, err := WriteString(writer, &fileN); err != nil {
+		log.Debug(err)
+		log.Error("Error while sending file name")
+		return 0, err
+	}
+
+	// Write size of the file size to writer
+	if err := writeSize(writer, srcFileSize); err != nil {
+		log.Debug(err)
+		log.Error("Error while writing string size")
+		return 0, err
+	}
+
+	// Write file to writer
+	writtenSize, err := readWrite(srcFile, writer, srcFileSize)
+	if writtenSize != srcFileSize || err != nil {
+		log.Error("Error while writing binary file")
+		return writtenSize, err
+	}
+	return writtenSize, nil
+}
+
 // readSize reads first 4 bytes from the reader and convert them into a uint32 value
 func readSize(reader io.Reader) (uint32, error) {
 	// Read first 4 bytes for the size
@@ -85,31 +176,26 @@ func readSize(reader io.Reader) (uint32, error) {
 	return binary.BigEndian.Uint32(b), nil
 }
 
-// writeSize converts unsigned integer 32 to bytes
+// writeSize converts packet size to byte and write to writer
 // Take a look at encoding/gob package or protocol buffers for a better performance.
-func writeSize(size uint32) []byte {
+func writeSize(writer io.Writer, size uint32) error {
 	// consider using array over slice for a better performance i.e: arr := [4]byte{}
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint32(b, size)
-	return b
+	_, err := writer.Write(b)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while writing packet size")
+		return err
+	}
+	return nil
 }
 
 // readNBinary reads up to nth bytes and save it as fileN in downloadPath.
 // Maximum buffer size does not exceed bufferSize.
 // Returns error == nil only if file is fully downloaded, renamed and moved to downloadPath.
 func readNBinary(reader io.Reader, n uint32, fileN string) error {
-	var buffSize uint32
-	var totalReceived uint32 = 0
 	var isDownloadComplete = false
-	var receivedLen int
-
-	if n < bufferSize {
-		buffSize = n
-	} else {
-		buffSize = bufferSize
-	}
-
-	buffer := make([]byte, buffSize)
 
 	// Create directory if it doesn't exist
 	if err := os.MkdirAll(downloadPath, os.ModePerm); err != nil {
@@ -125,7 +211,7 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 		log.Error("Temp file could not be opened")
 	}
 
-	// Close and delete temp file when done
+	// If error encountered while writing a file, close then delete tmp file.
 	defer func(name string) {
 		if !isDownloadComplete {
 			if err := tmpFile.Close(); err != nil {
@@ -140,35 +226,9 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 		}
 	}(tmpFile.Name())
 
-	// Repeat downloading until the file is fully received
-	for totalReceived < n {
-		if totalReceived+buffSize > n {
-			buffer, err = io.ReadAll(io.LimitReader(reader, int64(n-totalReceived)))
-			receivedLen = len(buffer)
-			// If reader contains less than expected n
-			if totalReceived+uint32(receivedLen) != n {
-				log.Error("File not fully received")
-				return errors.New("unexpected EOF")
-			}
-		} else {
-			receivedLen, err = io.ReadFull(reader, buffer)
-		}
-
-		if err != nil {
-			log.Debug(err)
-			log.Error("Error while receiving bytes")
-			return err
-		}
-
-		writtenLen, err := tmpFile.Write(buffer)
-
-		// If error encountered while writing a file, close then delete tmp file.
-		if writtenLen != receivedLen || err != nil {
-			log.Debug(err)
-			log.Error("Error while writing to a file")
-			return err
-		}
-		totalReceived += uint32(receivedLen)
+	writtenSize, err := readWrite(reader, tmpFile, n)
+	if writtenSize != n || err != nil {
+		return err
 	}
 	isDownloadComplete = true
 
@@ -209,8 +269,61 @@ func readNBytes(reader io.Reader, n uint32) ([]byte, error) {
 	return buffer, err
 }
 
-// IntToUint32 converts integer value to uint32. Returns error if value occurs overflow
-func IntToUint32(n int) (uint32, error) {
+// readWrite is a helper function to read exactly size bytes from reader and write it to writer.
+// Returns length of bytes written and error, if any. Error = nil only if length of bytes
+// written = size.
+func readWrite(reader io.Reader, writer io.Writer, size uint32) (uint32, error) {
+	var totalReceived uint32 = 0
+	var receivedLen int
+	var err error
+	var buffSize uint32
+
+	// Determine buffer size
+	if size < bufferSize {
+		buffSize = size
+	} else {
+		buffSize = bufferSize
+	}
+
+	// Create buffer
+	buffer := make([]byte, buffSize)
+
+	// Repeat downloading until the file is fully received
+	for totalReceived < size {
+		// Last portion of the data
+		if totalReceived+buffSize > size {
+			buffer, err = io.ReadAll(io.LimitReader(reader, int64(size-totalReceived)))
+			receivedLen = len(buffer)
+			// If reader contains less than expected size
+			if totalReceived+uint32(receivedLen) != size {
+				log.Error("File not fully received")
+				return totalReceived + uint32(receivedLen), errors.New("unexpected EOF")
+			}
+		} else {
+			receivedLen, err = io.ReadFull(reader, buffer)
+		}
+
+		if err != nil {
+			log.Debug(err)
+			log.Error("Error while receiving bytes")
+			return totalReceived, err
+		}
+
+		// Write to writer
+		writtenLen, err := writer.Write(buffer)
+		if writtenLen != receivedLen || err != nil {
+			log.Debug(err)
+			log.Error("Error while writing to a file")
+			return totalReceived + uint32(writtenLen), err
+		}
+		totalReceived += uint32(receivedLen)
+	}
+	return totalReceived, nil
+}
+
+// IntToUint32 converts int64 value to uint32.
+// Returns value and error. If value occurs overflow, 0 and error is returned
+func IntToUint32(n int64) (uint32, error) {
 	if n < 0 || n > uint32Max {
 		log.Error("value ", n, " overflows uint32")
 		return 0, errors.New("value overflows uint32")

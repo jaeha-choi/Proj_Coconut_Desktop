@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"crypto/sha1"
+	"encoding/binary"
 	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"io"
@@ -21,7 +22,7 @@ func init() {
 func TestReadBinary(t *testing.T) {
 	// Create reader for destination file
 	dstFileN := "cat_result.jpg"
-	destFileNSizeReader := bytes.NewReader(writeSize(uint32(len(dstFileN))))
+	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
 	destFileNReader := bytes.NewReader([]byte(dstFileN))
 
 	// Create reader for source file
@@ -44,7 +45,7 @@ func TestReadBinary(t *testing.T) {
 		t.Error("Error while getting image file stats")
 		return // imgFileStat == nil
 	}
-	srcFileSizeReader := bytes.NewReader(writeSize(uint32(srcFileStat.Size())))
+	srcFileSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(srcFileStat.Size())))
 
 	// Combine all readers
 	readers := io.MultiReader(destFileNSizeReader, destFileNReader, srcFileSizeReader, srcFileReader)
@@ -96,7 +97,7 @@ func TestReadBinaryEmptyFileNSizeError(t *testing.T) {
 			t.Error("Input file not properly closed")
 		}
 	}()
-	fileNFileSizeReader := bytes.NewReader(writeSize(8192))
+	fileNFileSizeReader := bytes.NewReader(sizeToBytesHelper(t, 8192))
 
 	// Combine all readers
 	readers := io.MultiReader(fileNFileSizeReader, fileNFile)
@@ -117,7 +118,7 @@ func TestReadBinaryEmptyFileNSizeError(t *testing.T) {
 func TestReadBinaryEmptyFileNError(t *testing.T) {
 	// Create reader for destination file
 	dstFileN := ""
-	destFileNSizeReader := bytes.NewReader(writeSize(uint32(len(dstFileN))))
+	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
 	destFileNReader := bytes.NewReader([]byte(dstFileN))
 
 	// Create reader for source file
@@ -140,7 +141,7 @@ func TestReadBinaryEmptyFileNError(t *testing.T) {
 		t.Error("Error while getting image file stats")
 		return // imgFileStat == nil
 	}
-	srcFileSizeReader := bytes.NewReader(writeSize(uint32(srcFileStat.Size())))
+	srcFileSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(srcFileStat.Size())))
 
 	// Combine all readers
 	readers := io.MultiReader(destFileNSizeReader, destFileNReader, srcFileSizeReader, srcFileReader)
@@ -161,7 +162,7 @@ func TestReadBinaryEmptyFileNError(t *testing.T) {
 func TestReadBinaryIncorrectFileSize(t *testing.T) {
 	// Create reader for destination file
 	dstFileN := "cat_result.jpg"
-	destFileNSizeReader := bytes.NewReader(writeSize(uint32(len(dstFileN))))
+	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
 	destFileNReader := bytes.NewReader([]byte(dstFileN))
 
 	// Create reader for source file
@@ -200,7 +201,7 @@ func TestReadBinaryIncorrectFileSize(t *testing.T) {
 func TestReadBinaryShortReader(t *testing.T) {
 	// Create reader for destination file
 	dstFileN := "cat_result.jpg"
-	destFileNSizeReader := bytes.NewReader(writeSize(uint32(len(dstFileN))))
+	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
 	destFileNReader := bytes.NewReader([]byte(dstFileN))
 
 	// Create reader for source file
@@ -223,7 +224,7 @@ func TestReadBinaryShortReader(t *testing.T) {
 		t.Error("Error while getting image file stats")
 		return // imgFileStat == nil
 	}
-	srcFileSizeReader := bytes.NewReader(writeSize(uint32(srcFileStat.Size())))
+	srcFileSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(srcFileStat.Size())))
 
 	limitedFile := io.LimitReader(srcFileReader, srcFileStat.Size()-100)
 	// Combine all readers
@@ -477,7 +478,7 @@ func TestReadNBinaryTinyWrongSize2(t *testing.T) {
 func TestReadString(t *testing.T) {
 	testStr := "test this"
 
-	sizeBytes := writeSize(uint32(len(testStr)))
+	sizeBytes := sizeToBytesHelper(t, uint32(len(testStr)))
 	sizeReader := bytes.NewReader(sizeBytes)
 	strReader := bytes.NewReader([]byte(testStr))
 	reader := io.MultiReader(sizeReader, strReader)
@@ -513,7 +514,7 @@ func TestReadStringSizeMax(t *testing.T) {
 		}
 	}()
 
-	sizeReader := bytes.NewReader(writeSize(4096))
+	sizeReader := bytes.NewReader(sizeToBytesHelper(t, 4096))
 	reader := io.MultiReader(sizeReader, file)
 
 	result, err := ReadString(reader)
@@ -554,7 +555,7 @@ func TestReadStringSizeExceedMax(t *testing.T) {
 			t.Error("Input file not properly closed")
 		}
 	}()
-	sizeReader := bytes.NewReader(writeSize(8192))
+	sizeReader := bytes.NewReader(sizeToBytesHelper(t, 8192))
 	reader := io.MultiReader(sizeReader, file)
 
 	_, err = ReadString(reader)
@@ -566,7 +567,7 @@ func TestReadStringSizeExceedMax(t *testing.T) {
 func TestReadStringSizeShortReader(t *testing.T) {
 	testStr := "test this"
 
-	sizeBytes := writeSize(1024)
+	sizeBytes := sizeToBytesHelper(t, 1024)
 	sizeReader := bytes.NewReader(sizeBytes)
 	strReader := bytes.NewReader([]byte(testStr))
 	reader := io.MultiReader(sizeReader, strReader)
@@ -635,7 +636,7 @@ func TestReadSizeMax(t *testing.T) {
 }
 
 func TestWriteSize0(t *testing.T) {
-	result := writeSize(0)
+	result := sizeToBytesHelper(t, 0)
 	expected := make([]byte, 4)
 	// [0 0 0 0]
 	if bytes.Compare(result, expected) != 0 {
@@ -646,7 +647,7 @@ func TestWriteSize0(t *testing.T) {
 }
 
 func TestWriteSize255(t *testing.T) {
-	result := writeSize(255)
+	result := sizeToBytesHelper(t, 255)
 	expected := make([]byte, 4)
 	// [0 0 0 255]
 	expected[3] = 255
@@ -658,7 +659,7 @@ func TestWriteSize255(t *testing.T) {
 }
 
 func TestWriteSize4095(t *testing.T) {
-	result := writeSize(4095)
+	result := sizeToBytesHelper(t, 4095)
 	expected := make([]byte, 4)
 	// [0 0 15 255]
 	expected[2] = 15
@@ -671,7 +672,7 @@ func TestWriteSize4095(t *testing.T) {
 }
 
 func TestWriteSizeMax(t *testing.T) {
-	result := writeSize(4294967295)
+	result := sizeToBytesHelper(t, 4294967295)
 	expected := make([]byte, 4)
 	// [255 255 255 255]
 	expected[0] = 255
@@ -861,6 +862,14 @@ func TestIntToUint32(t *testing.T) {
 	if val != 27532 || err != nil {
 		t.Error("Error during conversion")
 	}
+}
+
+func sizeToBytesHelper(t *testing.T, size uint32) []byte {
+	t.Helper()
+	// consider using array over slice for a better performance i.e: arr := [4]byte{}
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, size)
+	return b
 }
 
 func ChecksumCompareHelper(t *testing.T, expected io.Reader, result io.Reader) bool {
