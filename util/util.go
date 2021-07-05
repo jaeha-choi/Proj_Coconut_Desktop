@@ -158,6 +158,7 @@ func WriteBinary(writer io.Writer, filePath *string) (uint32, error) {
 	// Write file to writer
 	writtenSize, err := readWrite(srcFile, writer, srcFileSize)
 	if writtenSize != srcFileSize || err != nil {
+		log.Debug(err)
 		log.Error("Error while writing binary file")
 		return writtenSize, err
 	}
@@ -209,6 +210,7 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 	if err != nil {
 		log.Debug(err)
 		log.Error("Temp file could not be opened")
+		return err
 	}
 
 	// If error encountered while writing a file, close then delete tmp file.
@@ -226,8 +228,9 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 		}
 	}(tmpFile.Name())
 
-	writtenSize, err := readWrite(reader, tmpFile, n)
-	if writtenSize != n || err != nil {
+	if writtenSize, err := readWrite(reader, tmpFile, n); writtenSize != n || err != nil {
+		log.Debug(err)
+		log.Error("Error while reading from reader and writing to temp file")
 		return err
 	}
 	isDownloadComplete = true
