@@ -77,23 +77,23 @@ func ReadBinary(reader io.Reader) error {
 // length of msg cannot exceed bufferSize
 // Returns total bytes sent and error, if any.
 // err == nil only if length of sent bytes = length of msg
-func WriteString(writer io.Writer, msg *string) (int, error) {
+func WriteString(writer io.Writer, msg string) (int, error) {
 	// Return error if msg is too big
-	if len(*msg) > bufferSize {
+	if len(msg) > bufferSize {
 		log.Error("String should contain less than ", bufferSize, " characters")
 		return 0, errors.New("size exceeded")
 	}
 
 	// Write size of the string to writer
-	if err := writeSize(writer, uint32(len(*msg))); err != nil {
+	if err := writeSize(writer, uint32(len(msg))); err != nil {
 		log.Debug(err)
 		log.Error("Error while writing string size")
 		return 0, err
 	}
 
 	// Write msg to writer
-	writtenSize, err := writer.Write([]byte(*msg))
-	if writtenSize != len(*msg) || err != nil {
+	writtenSize, err := writer.Write([]byte(msg))
+	if writtenSize != len(msg) || err != nil {
 		log.Debug(err)
 		log.Error("Error while writing string")
 		return writtenSize, err
@@ -106,9 +106,9 @@ func WriteString(writer io.Writer, msg *string) (int, error) {
 // total bytes sent = file size.
 // writer is likely to be net.Conn. File size cannot exceed max value of uint32
 // as of now. We can split files or change the data type to uint64 if time allows.
-func WriteBinary(writer io.Writer, filePath *string) (uint32, error) {
+func WriteBinary(writer io.Writer, filePath string) (uint32, error) {
 	// Open source file to send
-	srcFile, err := os.Open(*filePath)
+	srcFile, err := os.Open(filePath)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while opening source file")
@@ -139,10 +139,10 @@ func WriteBinary(writer io.Writer, filePath *string) (uint32, error) {
 	}
 
 	// Only preserve file name instead of passing directory + file name
-	_, fileN := filepath.Split(*filePath)
+	_, fileN := filepath.Split(filePath)
 
 	// Send file name
-	if _, err := WriteString(writer, &fileN); err != nil {
+	if _, err := WriteString(writer, fileN); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending file name")
 		return 0, err
