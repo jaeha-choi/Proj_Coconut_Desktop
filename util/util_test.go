@@ -74,7 +74,7 @@ func TestReadBinary(t *testing.T) {
 		t.Error("Error while resetting reader offset")
 	}
 
-	if !ChecksumCompareHelper(t, srcFileReader, resImgFile) {
+	if !ChecksumMatch(t, srcFileReader, resImgFile) {
 		t.Error("Checksum does not match")
 	}
 	// Remove downloadPath after testing
@@ -356,7 +356,7 @@ func TestReadNBinary(t *testing.T) {
 		t.Error("Error while resetting reader offset")
 	}
 
-	if !ChecksumCompareHelper(t, imgFile, resImgFile) {
+	if !ChecksumMatch(t, imgFile, resImgFile) {
 		t.Error("Checksum does not match")
 	}
 	// Remove downloadPath after testing
@@ -412,13 +412,53 @@ func TestReadNBinaryTiny(t *testing.T) {
 		t.Error("Error while resetting reader offset")
 	}
 
-	if !ChecksumCompareHelper(t, imgFile, resImgFile) {
+	if !ChecksumMatch(t, imgFile, resImgFile) {
 		t.Error("Checksum does not match")
 	}
 	// Remove downloadPath after testing
 	if err := os.RemoveAll(downloadPath); err != nil {
 		log.Debug(err)
 		log.Error("Existing directory not deleted, perhaps it does not exist?")
+	}
+}
+
+func TestReadWriteBinary(t *testing.T) {
+	srcFileN := "../testdata/util/cat.jpg"
+	var buffer bytes.Buffer
+
+	// Test WriteBinary
+	if _, err := WriteBinary(&buffer, srcFileN); err != nil {
+		log.Debug(err)
+		t.Error("Error in WriteBinary")
+		return
+	}
+
+	// Test ReadBinary
+	if err := ReadBinary(&buffer); err != nil {
+		log.Debug(err)
+		t.Error("Error in ReadBinary")
+		return
+	}
+
+	// Open "sent" file
+	expected, err := os.Open(srcFileN)
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error while opening src file")
+		return
+	}
+
+	// Open "received" file
+	result, err := os.Open(filepath.Join(downloadPath, "cat.jpg"))
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error while opening dst file")
+		return
+	}
+
+	// Compare checksum
+	if !ChecksumMatch(t, expected, result) {
+		t.Error("Checksum mismatch")
 	}
 }
 
@@ -825,7 +865,7 @@ func TestReadNStringBufferSize(t *testing.T) {
 		t.Error("Error while setting reader offset")
 	}
 
-	if !ChecksumCompareHelper(t, file, tmpFile) {
+	if !ChecksumMatch(t, file, tmpFile) {
 		t.Error("checksum does not match")
 	}
 }
@@ -889,7 +929,7 @@ func TestReadNStringBufferSizeMinusOne(t *testing.T) {
 	}
 	inputReader := io.LimitReader(file, 4095)
 
-	if !ChecksumCompareHelper(t, inputReader, tmpReader) {
+	if !ChecksumMatch(t, inputReader, tmpReader) {
 		t.Error("checksum does not match")
 	}
 }
@@ -939,7 +979,7 @@ func sizeToBytesHelper(t *testing.T, size uint32) []byte {
 	return b
 }
 
-func ChecksumCompareHelper(t *testing.T, expected io.Reader, result io.Reader) bool {
+func ChecksumMatch(t *testing.T, expected io.Reader, result io.Reader) bool {
 	t.Helper()
 
 	// Get sha-1 sum of original
