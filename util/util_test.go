@@ -243,6 +243,73 @@ func TestReadBinaryShortReader(t *testing.T) {
 	}
 }
 
+func TestReadWriteString(t *testing.T) {
+	var buffer bytes.Buffer
+	msg := "test msg"
+
+	// Test WriteString
+	writtenLen, err := WriteString(&buffer, msg)
+	if writtenLen != len(msg) || err != nil {
+		log.Debug(err)
+		t.Error("Error in WriteString")
+		return
+	}
+
+	// Test ReadString
+	resultStr, err := ReadString(&buffer)
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in ReadString")
+		return
+	}
+
+	// Verify string
+	if msg != resultStr {
+		t.Error("Result does mismatch")
+		return
+	}
+}
+
+func TestWriteString(t *testing.T) {
+	var buffer bytes.Buffer
+	msg := "test msg"
+	writtenLen, err := WriteString(&buffer, msg)
+	if writtenLen != len(msg) || err != nil {
+		log.Debug(err)
+		t.Error("Error in WriteString")
+		return
+	}
+
+	// Read first four bytes for size
+	strSize, err := ioutil.ReadAll(io.LimitReader(&buffer, 4))
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error while getting string length")
+		return
+	}
+
+	// Check size
+	size := binary.BigEndian.Uint32(strSize)
+	if size != uint32(len(msg)) {
+		t.Error("Size does not match")
+	}
+
+	// Read the rest (since this test does not contain any other data)
+	b, err := ioutil.ReadAll(&buffer)
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error while reading buffer")
+		return
+	}
+
+	// Verify string
+	if msg != string(b) {
+		log.Debug(string(b))
+		t.Error("Result does mismatch")
+		return
+	}
+}
+
 func TestReadNBinary(t *testing.T) {
 	testFileN := "../testdata/util/cat.jpg"
 	resultFileN := "cat_result.jpg"
