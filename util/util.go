@@ -17,6 +17,10 @@ const (
 	downloadPath = "./downloaded"
 )
 
+var SizeError = errors.New("size exceeded")
+
+var EmptyFileName = errors.New("empty filename")
+
 // ReadString reads string from a connection
 func ReadString(reader io.Reader) (string, error) {
 	// Read packet size (string size)
@@ -30,7 +34,7 @@ func ReadString(reader io.Reader) (string, error) {
 	// ReadString always expect the size to be <= bufferSize
 	if size > bufferSize {
 		log.Error("String size cannot be greater than ", bufferSize, ". String size: ", size)
-		return "", errors.New("size exceeded")
+		return "", SizeError
 	}
 
 	// Read string from the packet
@@ -54,7 +58,7 @@ func ReadBinary(reader io.Reader) error {
 	}
 	if fileN == "" {
 		log.Error("File name cannot be empty")
-		return errors.New("empty filename")
+		return EmptyFileName
 	}
 
 	// Read file size
@@ -82,7 +86,7 @@ func WriteString(writer io.Writer, msg string) (int, error) {
 	// Return error if msg is too big
 	if len(msg) > bufferSize {
 		log.Error("String should contain less than ", bufferSize, " characters")
-		return 0, errors.New("size exceeded")
+		return 0, SizeError
 	}
 
 	// Write size of the string to writer
