@@ -10,6 +10,8 @@ import (
 	"os"
 )
 
+var ExistingKeyError = errors.New("keys already exist")
+
 func CreateRSAKey(bitSize int) (*rsa.PrivateKey, error) {
 	reader := rand.Reader
 	key, err := rsa.GenerateKey(reader, bitSize)
@@ -28,7 +30,8 @@ func SaveRSAKeys(key *rsa.PrivateKey) error {
 
 	// Check if keys already exist
 	if _, err := os.Stat(pubFileN); err == nil {
-		return errors.New("keys already exist")
+		log.Debug(err)
+		return ExistingKeyError
 	}
 	// Open pubkey file
 	pubOut, err := os.Create(pubFileN)
