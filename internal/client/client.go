@@ -1,10 +1,12 @@
 package client
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"io/ioutil"
@@ -162,14 +164,50 @@ func PemToKeys(privBlock *pem.Block) (*rsa.PrivateKey, error) {
 func PemToSha256(pubBlock *pem.Block) []byte {
 	// sha256sum always returns 32 bytes
 	hash := sha256.Sum256(pubBlock.Bytes)
-
-	// Base64 seems unnecessary as of now, but in case raw bytes cause issues,
-	// enable them by uncommenting following codes.
-
-	// Base64 of sha256sum would always generate 44 bytes including a padding,
-	// but in case we change hash method from sha256, I won't hardcode it.
-	//encoded := make([]byte, base64.StdEncoding.EncodedLen(len(hash)))
-	//base64.StdEncoding.Encode(encoded, hash[:])
-	//return encoded
 	return hash[:]
+}
+
+// genSymKey generates random key for symmetric encryption
+func genSymKey() ([]byte, error) {
+	// Since we're using AES, generate 32 bytes key for AES256
+	key := make([]byte, 32)
+	// Create random key for symmetric encryption
+	if _, err := rand.Read(key); err != nil {
+		log.Debug(err)
+		log.Error("Error while generating symmetric encryption key")
+		return nil, err
+	}
+	return key, nil
+}
+
+// encryptSignSymKey encrypts key for symmetric encryption with receiver's pubic key,
+// and sign hashed AES key with sender's private key.
+func encryptSignSymKey(key []byte, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) ([]byte, []byte, error) {
+	rng := rand.Reader
+
+	// Encrypt symmetric encryption key
+	encryptedKey, err := rsa.EncryptOAEP(sha256.New(), rng, receiverPubKey, key, nil)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while encrypting symmetric encryption key key")
+		return nil, nil, err
+	}
+
+	// Sign symmetric encryption key
+	data := sha256.Sum256(key)
+	keySignature, err := rsa.SignPSS(rng, senderPrivKey, crypto.SHA256, data[:], nil)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while signing symmetric encryption key key")
+		return nil, nil, err
+	}
+
+	return encryptedKey, keySignature, nil
+}
+
+// BytesToBase64 encodes raw bytes to base64
+func BytesToBase64(data []byte) []byte {
+	encoded := make([]byte, base64.StdEncoding.EncodedLen(len(data)))
+	base64.StdEncoding.Encode(encoded, data[:])
+	return encoded
 }
