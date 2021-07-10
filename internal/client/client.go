@@ -14,23 +14,19 @@ import (
 )
 
 // createRSAKey creates RSA keys with bitSize.
-func createRSAKey(bitSize int) (*rsa.PrivateKey, error) {
+func createRSAKey(bitSize int) (privKey *rsa.PrivateKey, err error) {
 	reader := rand.Reader
-	key, err := rsa.GenerateKey(reader, bitSize)
-	if err != nil {
+	if privKey, err = rsa.GenerateKey(reader, bitSize); err != nil {
 		log.Debug(err)
 		log.Error("Error while creating RSA key")
 		return nil, err
 	}
-	return key, nil
+	return privKey, nil
 }
 
 // OpenKeys open existing keys and return them as *pem.Block.
 // If keys are not found, new keys will be created.
-func OpenKeys() (*pem.Block, *pem.Block, error) {
-	var err error
-	var pubBlock *pem.Block
-	var privBlock *pem.Block
+func OpenKeys() (pubBlock *pem.Block, privBlock *pem.Block, err error) {
 	var newKeyBitSize = 4096
 	pubFileN := "key.pub"
 	privFileN := "key.priv"
@@ -153,14 +149,13 @@ func OpenKeys() (*pem.Block, *pem.Block, error) {
 // PemToKeys convert private PEM block to rsa.PrivateKey struct.
 // *rsa.PrivateKey contains public key as well, so access public key
 // with key.PublicKey
-func PemToKeys(privBlock *pem.Block) (*rsa.PrivateKey, error) {
-	key, err := x509.ParsePKCS1PrivateKey(privBlock.Bytes)
-	if err != nil {
+func PemToKeys(privBlock *pem.Block) (privKey *rsa.PrivateKey, err error) {
+	if privKey, err = x509.ParsePKCS1PrivateKey(privBlock.Bytes); err != nil {
 		log.Debug(err)
 		log.Error("Error while converting PEM block to keys")
 		return nil, err
 	}
-	return key, nil
+	return privKey, nil
 }
 
 // PemToSha256 generates bytes containing sha256sum of pubBlock bytes.
@@ -171,9 +166,9 @@ func PemToSha256(pubBlock *pem.Block) []byte {
 }
 
 // genSymKey generates random key for symmetric encryption
-func genSymKey() ([]byte, error) {
+func genSymKey() (key []byte, err error) {
 	// Since we're using AES, generate 32 bytes key for AES256
-	key := make([]byte, 32)
+	key = make([]byte, 32)
 	// Create random key for symmetric encryption
 	if _, err := rand.Read(key); err != nil {
 		log.Debug(err)
@@ -184,28 +179,51 @@ func genSymKey() ([]byte, error) {
 }
 
 // encryptSignSymKey encrypts key for symmetric encryption with receiver's pubic key,
-// and sign hashed AES key with sender's private key.
-func encryptSignSymKey(key []byte, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) ([]byte, []byte, error) {
+// and sign hashed symmetric encryption key with sender's private key.
+func encryptSignSymKey(symKey []byte, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) (
+	encryptedKey []byte, keySignature []byte, err error) {
 	rng := rand.Reader
 
 	// Encrypt symmetric encryption key
-	encryptedKey, err := rsa.EncryptOAEP(sha256.New(), rng, receiverPubKey, key, nil)
-	if err != nil {
+	if encryptedKey, err = rsa.EncryptOAEP(sha256.New(), rng, receiverPubKey, symKey, nil); err != nil {
 		log.Debug(err)
-		log.Error("Error while encrypting symmetric encryption key key")
+		log.Error("Error while encrypting symmetric encryption key")
 		return nil, nil, err
 	}
 
 	// Sign symmetric encryption key
-	data := sha256.Sum256(key)
-	keySignature, err := rsa.SignPSS(rng, senderPrivKey, crypto.SHA256, data[:], nil)
-	if err != nil {
+	hashedKey := sha256.Sum256(symKey)
+	if keySignature, err = rsa.SignPSS(rng, senderPrivKey, crypto.SHA256, hashedKey[:], nil); err != nil {
 		log.Debug(err)
-		log.Error("Error while signing symmetric encryption key key")
+		log.Error("Error while signing symmetric encryption key")
 		return nil, nil, err
 	}
 
 	return encryptedKey, keySignature, nil
+}
+
+// decryptVerifySymKey decrypts key for symmetric encryption with receiver's private key,
+// and verify signature with sender's public key.
+func decryptVerifySymKey(encrypted []byte, signature []byte, senderPubKey *rsa.PublicKey, recieverPrivKey *rsa.PrivateKey) (
+	symKey []byte, err error) {
+	rng := rand.Reader
+
+	// Decrypt symmetric encryption key
+	if symKey, err = rsa.DecryptOAEP(sha256.New(), rng, recieverPrivKey, encrypted, nil); err != nil {
+		log.Debug(err)
+		log.Error("Error while decrypting symmetric encryption key")
+		return nil, err
+	}
+
+	// Verify symmetric encryption key signature
+	hashedKey := sha256.Sum256(symKey)
+	if err := rsa.VerifyPSS(senderPubKey, crypto.SHA256, hashedKey[:], signature, nil); err != nil {
+		log.Debug(err)
+		log.Error("Invalid symmetric encryption key signature")
+		return nil, err
+	}
+
+	return symKey, nil
 }
 
 // BytesToBase64 encodes raw bytes to base64
