@@ -146,6 +146,8 @@ func OpenKeys() (*pem.Block, *pem.Block, error) {
 }
 
 // PemToKeys convert private PEM block to rsa.PrivateKey struct.
+// *rsa.PrivateKey contains public key as well, so access public key
+// with key.PublicKey
 func PemToKeys(privBlock *pem.Block) (*rsa.PrivateKey, error) {
 	key, err := x509.ParsePKCS1PrivateKey(privBlock.Bytes)
 	if err != nil {
