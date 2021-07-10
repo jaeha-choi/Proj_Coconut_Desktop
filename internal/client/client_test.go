@@ -38,3 +38,28 @@ func TestOpenKeys(t *testing.T) {
 		return
 	}
 }
+
+func TestPemToKeys(t *testing.T) {
+	pubPem, privPem, err := OpenKeys()
+	if pubPem == nil || privPem == nil || err != nil {
+		log.Debug(err)
+		t.Error("Error in OpenKeys")
+		return
+	}
+
+	if privKey, err := PemToKeys(privPem); privKey == nil || err != nil {
+		log.Debug(err)
+		log.Error("Error in PemToKeys")
+		return
+	}
+}
+
+func TestPemToSha256(t *testing.T) {
+	pubPem, privPem, err := OpenKeys()
+	if pubPem == nil || privPem == nil || err != nil {
+		log.Debug(err)
+		t.Error("Error in OpenKeys")
+		return
+	}
+	PemToSha256(pubPem)
+}
