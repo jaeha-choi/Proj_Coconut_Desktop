@@ -13,6 +13,7 @@ import (
 	"os"
 )
 
+// createRSAKey creates RSA keys with bitSize.
 func createRSAKey(bitSize int) (*rsa.PrivateKey, error) {
 	reader := rand.Reader
 	key, err := rsa.GenerateKey(reader, bitSize)
@@ -24,6 +25,8 @@ func createRSAKey(bitSize int) (*rsa.PrivateKey, error) {
 	return key, nil
 }
 
+// OpenKeys open existing keys and return them as *pem.Block.
+// If keys are not found, new keys will be created.
 func OpenKeys() (*pem.Block, *pem.Block, error) {
 	var err error
 	var pubBlock *pem.Block
