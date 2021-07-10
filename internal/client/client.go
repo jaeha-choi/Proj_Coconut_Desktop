@@ -3,6 +3,7 @@ package client
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
@@ -142,4 +143,31 @@ func OpenKeys() (*pem.Block, *pem.Block, error) {
 		log.Error("Error while checking stat of the file")
 	}
 	return pubBlock, privBlock, err
+}
+
+// PemToKeys convert private PEM block to rsa.PrivateKey struct.
+func PemToKeys(privBlock *pem.Block) (*rsa.PrivateKey, error) {
+	key, err := x509.ParsePKCS1PrivateKey(privBlock.Bytes)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while converting PEM block to keys")
+		return nil, err
+	}
+	return key, nil
+}
+
+// PemToSha256 generates bytes containing sha256sum of pubBlock bytes.
+func PemToSha256(pubBlock *pem.Block) []byte {
+	// sha256sum always returns 32 bytes
+	hash := sha256.Sum256(pubBlock.Bytes)
+
+	// Base64 seems unnecessary as of now, but in case raw bytes cause issues,
+	// enable them by uncommenting following codes.
+
+	// Base64 of sha256sum would always generate 44 bytes including a padding,
+	// but in case we change hash method from sha256, I won't hardcode it.
+	//encoded := make([]byte, base64.StdEncoding.EncodedLen(len(hash)))
+	//base64.StdEncoding.Encode(encoded, hash[:])
+	//return encoded
+	return hash[:]
 }
