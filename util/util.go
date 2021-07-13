@@ -182,13 +182,25 @@ func readSize(reader io.Reader) (uint32, error) {
 	return binary.BigEndian.Uint32(b), nil
 }
 
+// Uint32ToByte converts uint32 value to byte slices
+func Uint32ToByte(size uint32) []byte {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, size)
+	return b
+}
+
+// Uint16ToByte converts uint16 value to byte slices
+func Uint16ToByte(size uint16) []byte {
+	b := make([]byte, 2)
+	binary.BigEndian.PutUint16(b, size)
+	return b
+}
+
 // writeSize converts packet size to byte and write to writer
 // Take a look at encoding/gob package or protocol buffers for a better performance.
 func writeSize(writer io.Writer, size uint32) error {
 	// consider using array over slice for a better performance i.e: arr := [4]byte{}
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, size)
-	_, err := writer.Write(b)
+	_, err := writer.Write(Uint32ToByte(size))
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while writing packet size")
