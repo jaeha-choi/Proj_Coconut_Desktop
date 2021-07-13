@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	bufferSize   = 4096
-	uint32Max    = 4294967295
-	downloadPath = "./downloaded"
+	BufferSize   = 4096
+	Uint32Max    = 4294967295
+	DownloadPath = "./downloaded"
 )
 
 var SizeError = errors.New("size exceeded")
@@ -31,9 +31,9 @@ func ReadString(reader io.Reader) (string, error) {
 		return "", err
 	}
 
-	// ReadString always expect the size to be <= bufferSize
-	if size > bufferSize {
-		log.Error("String size cannot be greater than ", bufferSize, ". String size: ", size)
+	// ReadString always expect the size to be <= BufferSize
+	if size > BufferSize {
+		log.Error("String size cannot be greater than ", BufferSize, ". String size: ", size)
 		return "", SizeError
 	}
 
@@ -45,6 +45,30 @@ func ReadString(reader io.Reader) (string, error) {
 		return "", err
 	}
 	return str, nil
+}
+
+func ReadBytes(reader io.Reader) (b []byte, err error) {
+	// Read packet size
+	size, err := readSize(reader)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while reading packet size")
+		return nil, err
+	}
+
+	// ReadBytes always expect the size to be <= BufferSize
+	if size > BufferSize {
+		log.Error("Size cannot be greater than ", BufferSize, ". Received size: ", size)
+		return nil, SizeError
+	}
+
+	// Read bytes from reader
+	if b, err = readNBytes(reader, size); err != nil {
+		log.Debug(err)
+		log.Error("Error raised by readNBytes")
+		return nil, err
+	}
+	return b, nil
 }
 
 // ReadBinary reads file name and file content from a connection and save it.
@@ -79,28 +103,31 @@ func ReadBinary(reader io.Reader) error {
 }
 
 // WriteString writes msg to writer
-// length of msg cannot exceed bufferSize
+// length of msg cannot exceed BufferSize
 // Returns total bytes sent and error, if any.
 // err == nil only if length of sent bytes = length of msg
 func WriteString(writer io.Writer, msg string) (int, error) {
-	// Return error if msg is too big
-	if len(msg) > bufferSize {
-		log.Error("String should contain less than ", bufferSize, " characters")
+	return WriteBytes(writer, []byte(msg))
+}
+
+func WriteBytes(writer io.Writer, b []byte) (n int, err error) {
+	// Return error if b is too big
+	if len(b) > BufferSize {
+		log.Error("Byte should contain less than ", BufferSize)
 		return 0, SizeError
 	}
-
 	// Write size of the string to writer
-	if err := writeSize(writer, uint32(len(msg))); err != nil {
+	if err := writeSize(writer, uint32(len(b))); err != nil {
 		log.Debug(err)
-		log.Error("Error while writing string size")
+		log.Error("Error while writing bytes size")
 		return 0, err
 	}
 
-	// Write msg to writer
-	writtenSize, err := writer.Write([]byte(msg))
-	if writtenSize != len(msg) || err != nil {
+	// Write b to writer
+	writtenSize, err := writer.Write(b)
+	if err != nil {
 		log.Debug(err)
-		log.Error("Error while writing string")
+		log.Error("Error while writing bytes")
 		return writtenSize, err
 	}
 	return writtenSize, err
@@ -196,6 +223,10 @@ func Uint16ToByte(size uint16) []byte {
 	return b
 }
 
+func ByteToUint16(b []byte) uint16 {
+	return binary.BigEndian.Uint16(b)
+}
+
 // writeSize converts packet size to byte and write to writer
 // Take a look at encoding/gob package or protocol buffers for a better performance.
 func writeSize(writer io.Writer, size uint32) error {
@@ -209,21 +240,21 @@ func writeSize(writer io.Writer, size uint32) error {
 	return nil
 }
 
-// readNBinary reads up to nth bytes and save it as fileN in downloadPath.
-// Maximum buffer size does not exceed bufferSize.
-// Returns error == nil only if file is fully downloaded, renamed and moved to downloadPath.
+// readNBinary reads up to nth bytes and save it as fileN in DownloadPath.
+// Maximum buffer size does not exceed BufferSize.
+// Returns error == nil only if file is fully downloaded, renamed and moved to DownloadPath.
 func readNBinary(reader io.Reader, n uint32, fileN string) error {
 	var isDownloadComplete = false
 
 	// Create directory if it doesn't exist
-	if err := os.MkdirAll(downloadPath, os.ModePerm); err != nil {
+	if err := os.MkdirAll(DownloadPath, os.ModePerm); err != nil {
 		log.Debug(err)
 		log.Error("Error while creating download directory")
 		return err
 	}
 
 	// Create temporary file for downloading
-	tmpFile, err := ioutil.TempFile(downloadPath, ".tmp_download_")
+	tmpFile, err := ioutil.TempFile(DownloadPath, ".tmp_download_")
 	if err != nil {
 		log.Debug(err)
 		log.Error("Temp file could not be opened")
@@ -259,8 +290,8 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 		return err
 	}
 
-	// Move temporary file to download directory (downloadPath)
-	if err := os.Rename(tmpFile.Name(), filepath.Join(downloadPath, fileN)); err != nil {
+	// Move temporary file to download directory (DownloadPath)
+	if err := os.Rename(tmpFile.Name(), filepath.Join(DownloadPath, fileN)); err != nil {
 		log.Debug(err)
 		log.Error("Error moving the temp file to download path")
 		if err := os.Remove(tmpFile.Name()); err != nil {
@@ -272,10 +303,10 @@ func readNBinary(reader io.Reader, n uint32, fileN string) error {
 	return nil
 }
 
-// readNString reads up to nth character. Maximum length should not exceed bufferSize.
+// readNString reads up to nth character. Maximum length should not exceed BufferSize.
 func readNString(reader io.Reader, n uint32) (string, error) {
-	if n > bufferSize {
-		log.Error("n should be smaller than ", bufferSize)
+	if n > BufferSize {
+		log.Error("n should be smaller than ", BufferSize)
 		return "", errors.New("parameter value error")
 	}
 	buffer, err := readNBytes(reader, n)
@@ -299,10 +330,10 @@ func readWrite(reader io.Reader, writer io.Writer, size uint32) (uint32, error) 
 	var buffSize uint32
 
 	// Determine buffer size
-	if size < bufferSize {
+	if size < BufferSize {
 		buffSize = size
 	} else {
-		buffSize = bufferSize
+		buffSize = BufferSize
 	}
 
 	// Create buffer
@@ -344,7 +375,7 @@ func readWrite(reader io.Reader, writer io.Writer, size uint32) (uint32, error) 
 // IntToUint32 converts int64 value to uint32.
 // Returns value and error. If value occurs overflow, 0 and error is returned
 func IntToUint32(n int64) (uint32, error) {
-	if n < 0 || n > uint32Max {
+	if n < 0 || n > Uint32Max {
 		log.Error("value ", n, " overflows uint32")
 		return 0, errors.New("value overflows uint32")
 	}

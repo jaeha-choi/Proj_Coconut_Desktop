@@ -63,7 +63,7 @@ func TestReadBinary(t *testing.T) {
 	}
 
 	// Open result image
-	resImgFile, err := os.Open(filepath.Join(downloadPath, dstFileN))
+	resImgFile, err := os.Open(filepath.Join(DownloadPath, dstFileN))
 	if err != nil || resImgFile == nil {
 		log.Debug(err)
 		t.Error("Error opening image file")
@@ -339,7 +339,7 @@ func TestReadNBinary(t *testing.T) {
 	}
 
 	// Open result image
-	resImgFile, err := os.Open(filepath.Join(downloadPath, resultFileN))
+	resImgFile, err := os.Open(filepath.Join(DownloadPath, resultFileN))
 	if err != nil || resImgFile == nil {
 		log.Debug(err)
 		t.Error("Error opening image file")
@@ -400,7 +400,7 @@ func TestReadNBinaryTiny(t *testing.T) {
 	}
 
 	// Open result image
-	resImgFile, err := os.Open(filepath.Join(downloadPath, resultFileN))
+	resImgFile, err := os.Open(filepath.Join(DownloadPath, resultFileN))
 	if err != nil || resImgFile == nil {
 		log.Debug(err)
 		t.Error("Error opening image file")
@@ -454,7 +454,7 @@ func TestReadWriteBinary(t *testing.T) {
 	}
 
 	// Open "received" file
-	result, err := os.Open(filepath.Join(downloadPath, "cat.jpg"))
+	result, err := os.Open(filepath.Join(DownloadPath, "cat.jpg"))
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error while opening dst file")
@@ -496,7 +496,7 @@ func TestReadNBinaryCreateDirError(t *testing.T) {
 	}
 
 	// Create new file to prevent downloaded directory from being created
-	newFileN := downloadPath
+	newFileN := DownloadPath
 	newFile, err := os.Create(newFileN)
 	if err != nil || newFile == nil {
 		log.Debug(err)
@@ -753,7 +753,7 @@ func TestReadSizeMax(t *testing.T) {
 	inputBytes[2] = 255
 	inputBytes[3] = 255
 	reader := bytes.NewReader(inputBytes)
-	if result, err := readSize(reader); err != nil || result != uint32Max {
+	if result, err := readSize(reader); err != nil || result != Uint32Max {
 		log.Debug(err)
 		t.Error("Error while reading size uint32max")
 		return
@@ -1097,8 +1097,8 @@ func TestCheckIPAddressInvalidIpv6(t *testing.T) {
 }
 
 func CleanupHelper() {
-	// Remove downloadPath after testing
-	if err := os.RemoveAll(downloadPath); err != nil {
+	// Remove DownloadPath after testing
+	if err := os.RemoveAll(DownloadPath); err != nil {
 		log.Debug(err)
 		log.Error("Existing directory not deleted, perhaps it does not exist?")
 	}
