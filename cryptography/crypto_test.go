@@ -111,7 +111,7 @@ func TestKeyEncryptSignAESKey(t *testing.T) {
 	log.Debug(fmt.Sprintf("Key(Hex): %x", key))
 	log.Debug(fmt.Sprintf("Key(Sha256,Hex): %x", sha256.Sum256(key)))
 
-	if _, _, err := encryptSignSymKey(key, &privKey.PublicKey, privKey); err != nil {
+	if _, _, err := encryptSignSymKey(key, &privKey.PublicKey, privKey, nil); err != nil {
 		log.Debug(err)
 		t.Error("Error in keyExchange")
 		return

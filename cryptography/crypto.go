@@ -13,10 +13,6 @@ import (
 	"os"
 )
 
-const (
-	MaxFileSize = 6.4e+10
-)
-
 // createRSAKey creates RSA keys with bitSize.
 func createRSAKey(bitSize int) (privKey *rsa.PrivateKey, err error) {
 	reader := rand.Reader
@@ -184,26 +180,26 @@ func genSymKey() (key []byte, err error) {
 
 // encryptSignSymKey encrypts key for symmetric encryption with receiver's pubic key,
 // and sign hashed symmetric encryption key with sender's private key.
-func encryptSignSymKey(symKey []byte, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) (
-	encryptedKey []byte, keySignature []byte, err error) {
+func encryptSignSymKey(symKey []byte, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey, additional []byte) (
+	encryptedData []byte, dataSignature []byte, err error) {
 	rng := rand.Reader
-
+	data := append(symKey, additional...)
 	// Encrypt symmetric encryption key
-	if encryptedKey, err = rsa.EncryptOAEP(sha256.New(), rng, receiverPubKey, symKey, nil); err != nil {
+	if encryptedData, err = rsa.EncryptOAEP(sha256.New(), rng, receiverPubKey, data, nil); err != nil {
 		log.Debug(err)
 		log.Error("Error while encrypting symmetric encryption key")
 		return nil, nil, err
 	}
 
 	// Sign symmetric encryption key
-	hashedKey := sha256.Sum256(symKey)
-	if keySignature, err = rsa.SignPSS(rng, senderPrivKey, crypto.SHA256, hashedKey[:], nil); err != nil {
+	hashedKey := sha256.Sum256(data)
+	if dataSignature, err = rsa.SignPSS(rng, senderPrivKey, crypto.SHA256, hashedKey[:], nil); err != nil {
 		log.Debug(err)
 		log.Error("Error while signing symmetric encryption key")
 		return nil, nil, err
 	}
 
-	return encryptedKey, keySignature, nil
+	return encryptedData, dataSignature, nil
 }
 
 // decryptVerifySymKey decrypts key for symmetric encryption with receiver's private key,
@@ -236,7 +232,3 @@ func BytesToBase64(data []byte) []byte {
 	base64.StdEncoding.Encode(encoded, data[:])
 	return encoded
 }
-
-//func encryptData(symKey []byte, msg []byte) (err error) {
-//
-//}
