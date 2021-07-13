@@ -2,6 +2,7 @@
 # If coverage.txt was generated locally, ignore that file
 coverage.txt
 /cryptography/downloaded/
+key.*
 
 ### Linux template
 *~
