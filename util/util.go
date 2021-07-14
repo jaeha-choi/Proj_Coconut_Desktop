@@ -56,11 +56,11 @@ func ReadBytes(reader io.Reader) (b []byte, err error) {
 		return nil, err
 	}
 
-	// ReadBytes always expect the size to be <= BufferSize
-	if size > BufferSize {
-		log.Error("Size cannot be greater than ", BufferSize, ". Received size: ", size)
-		return nil, SizeError
-	}
+	//// ReadBytes always expect the size to be <= BufferSize
+	//if size > BufferSize {
+	//	log.Error("Size cannot be greater than ", BufferSize, ". Received size: ", size)
+	//	return nil, SizeError
+	//}
 
 	// Read bytes from reader
 	if b, err = readNBytes(reader, size); err != nil {
@@ -111,11 +111,11 @@ func WriteString(writer io.Writer, msg string) (int, error) {
 }
 
 func WriteBytes(writer io.Writer, b []byte) (n int, err error) {
-	// Return error if b is too big
-	if len(b) > BufferSize {
-		log.Error("Byte should contain less than ", BufferSize)
-		return 0, SizeError
-	}
+	//// Return error if b is too big
+	//if len(b) > BufferSize {
+	//	log.Error("Byte should contain less than ", BufferSize)
+	//	return 0, SizeError
+	//}
 	// Write size of the string to writer
 	if err := writeSize(writer, uint32(len(b))); err != nil {
 		log.Debug(err)
