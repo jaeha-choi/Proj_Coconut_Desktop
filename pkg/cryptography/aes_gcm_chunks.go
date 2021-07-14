@@ -121,9 +121,6 @@ func DecryptSetup() (ag *AesGcmChunk, err error) {
 // Receiver's public key is required for encrypting symmetric encryption key.
 // Sender's private key is required for signing the encrypted key.
 // err == nil indicates successful execution.
-//
-// Packet length, IV and current chunk number are unencrypted. Passive attacker can
-// estimate the file size using chunk number.
 func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) (err error) {
 	keyChNum := append(ag.key, util.Uint16ToByte(ag.chunkCount)...)
 	// Encrypt and sign symmetric encryption key
@@ -149,16 +146,16 @@ func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, 
 	}
 
 	// Encrypt file name
-	encryptedFileName, iv, err := ag.encryptBytes([]byte(ag.fileName))
+	encryptedFileName, fileNameIv, err := ag.encryptBytes([]byte(ag.fileName))
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error in encryptBytes while encrypting file name")
 		return err
 	}
 	// Send IV (Nonce)
-	if _, err = util.WriteBytes(writer, iv); err != nil {
+	if _, err = util.WriteBytes(writer, fileNameIv); err != nil {
 		log.Debug(err)
-		log.Error("Error in WriteBytes while writing iv")
+		log.Error("Error in WriteBytes while writing fileNameIv")
 		return err
 	}
 	// Send encrypted file name
@@ -169,31 +166,29 @@ func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, 
 	}
 
 	// Send encrypted file
-	var encryptedFileChunk, ivAndChNum []byte
+	var encryptedFileChunk, iv []byte
 	// Loop until every byte is sent
 	// ag.readOffset and ag.readChunkNum are updated in encryptChunk
 	for ag.readOffset < ag.fileSize {
 		if ag.readOffset+ChunkSize >= ag.fileSize {
 			// Send last chunk
-			encryptedFileChunk, ivAndChNum, err = ag.encryptChunk(ag.fileSize - ag.readOffset)
+			encryptedFileChunk, iv, err = ag.encryptChunk(ag.fileSize - ag.readOffset)
 		} else {
 			// Send chunk
-			encryptedFileChunk, ivAndChNum, err = ag.encryptChunk(ChunkSize)
+			encryptedFileChunk, iv, err = ag.encryptChunk(ChunkSize)
 		}
 		if err != nil {
 			log.Debug(err)
 			log.Error("Error in encryptChunk. Read Offset: ", int(ag.readOffset))
 			return err
 		}
-		// Send IV + current chunk number in plain text
-		// Sending chunk number in plain text could allow a passive attacker to estimate the file size.
-		// Consider encrypting chunk number for confidentiality.
-		if _, err = util.WriteBytes(writer, ivAndChNum); err != nil {
+		// Send IV in plain text
+		if _, err = util.WriteBytes(writer, iv); err != nil {
 			log.Debug(err)
-			log.Error("Error in WriteBytes while sending ivAndChNum")
+			log.Error("Error in WriteBytes while sending iv")
 			return err
 		}
-		// Send encrypted file chunk
+		// Send encrypted file chunk + current chunk number (first two bytes)
 		if _, err = util.WriteBytes(writer, encryptedFileChunk); err != nil {
 			log.Debug(err)
 			log.Error("Error in WriteBytes while sending encryptedFileChunk")
@@ -203,13 +198,10 @@ func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, 
 	return nil
 }
 
-// encryptChunk encrypts portion of the file and return it as []byte. IV and current chunk number
-// is also returned in plain text.
+// encryptChunk encrypts portion of the file and return it as []byte with current chunk number
+// appended in the beginning (first two bytes). IV is also returned in plain text.
 // err == nil indicates successful execution.
-func (ag *AesGcmChunk) encryptChunk(chunkSize uint64) (encryptedData []byte, ivAndChNum []byte, err error) {
-	// Get current chunk number
-	currChunkNum := util.Uint16ToByte(ag.readChunkNum)
-
+func (ag *AesGcmChunk) encryptChunk(chunkSize uint64) (encryptedData []byte, iv []byte, err error) {
 	// Read chunk of file to encrypt
 	plain := make([]byte, int(chunkSize))
 	//plain := make([]byte, int(chunkSize)-gcmOverhead-len(currChunkNum))
@@ -219,22 +211,23 @@ func (ag *AesGcmChunk) encryptChunk(chunkSize uint64) (encryptedData []byte, ivA
 		return nil, nil, err
 	}
 
+	// Get current chunk number
+	currChunkNum := util.Uint16ToByte(ag.readChunkNum)
+	// Plain data is combined with current chunk number to be sent
+	plain = append(currChunkNum, plain...)
+
 	// Encrypt chunk of file and return encrypted output, IV, and error, if any.
-	encryptedData, iv, err := ag.encryptBytes(plain)
-	if err != nil {
+	if encryptedData, iv, err = ag.encryptBytes(plain); err != nil {
 		log.Debug(err)
 		log.Error("Error in encryptBytes")
 		return nil, nil, err
 	}
 
-	// IV is combined with current chunk number to be sent as plain text
-	ivAndChNum = append(iv, currChunkNum...)
-
 	// Update variables for loop in Encrypt
 	ag.readChunkNum += 1
-	ag.readOffset += uint64(len(plain))
+	ag.readOffset += uint64(len(plain) - len(currChunkNum))
 
-	return encryptedData, ivAndChNum, err
+	return encryptedData, iv, err
 }
 
 // encryptBytes encrypts plain and return encrypted data, IV that was used, and error, if any.
@@ -270,9 +263,6 @@ func (ag *AesGcmChunk) encryptBytes(plain []byte) (encryptedData []byte, iv []by
 // Sender's public key is required for verifying signature.
 // Receiver's private key is required for decrypting symmetric encryption key.
 // err == nil indicates successful execution.
-//
-// Packet length, IV and current chunk number are unencrypted. Passive attacker can
-// estimate the file size using chunk number.
 func (ag *AesGcmChunk) Decrypt(reader io.Reader, senderPubKey *rsa.PublicKey, receiverPrivKey *rsa.PrivateKey) (err error) {
 	// Reads encrypted symmetric encryption key
 	dataEncrypted, err := util.ReadBytes(reader)
@@ -328,24 +318,24 @@ func (ag *AesGcmChunk) Decrypt(reader io.Reader, senderPubKey *rsa.PublicKey, re
 	ag.fileName = string(decryptedFileName)
 
 	// Receive file and decrypt
-	var encryptedFileChunk, ivAndChNum []byte
+	var encryptedFileChunk, iv []byte
 	// Loop until every chunk is received
 	// ag.writeOffset and ag.writeChunkNum are updated in decryptChunk
 	for ag.writeChunkNum < ag.chunkCount {
-		// Read IV + current chunk number in plain text
-		if ivAndChNum, err = util.ReadBytes(reader); err != nil {
+		// Read IV in plain text
+		if iv, err = util.ReadBytes(reader); err != nil {
 			log.Debug(err)
-			log.Error("Error in ReadBytes while reading ivAndChNum")
+			log.Error("Error in ReadBytes while reading iv")
 			return err
 		}
-		// Read encrypted file chunk
+		// Read encrypted file chunk + current chunk number (first two bytes)
 		if encryptedFileChunk, err = util.ReadBytes(reader); err != nil {
 			log.Debug(err)
 			log.Error("Error in ReadBytes while reading encryptedFileChunk")
 			return err
 		}
-		// Decrypt file chunk
-		decryptedFileChunk, _, err := ag.decryptChunk(encryptedFileChunk, ivAndChNum)
+		// Decrypt file chunk + current chunk number (first two bytes)
+		decryptedFileChunk, _, err := ag.decryptChunk(encryptedFileChunk, iv)
 		if err != nil {
 			log.Debug(err)
 			log.Error("Error in decryptChunk")
@@ -391,11 +381,7 @@ func (ag *AesGcmChunk) Decrypt(reader io.Reader, senderPubKey *rsa.PublicKey, re
 // decryptChunk decrypts encryptedData with IV and current chunk number.
 // Decrypted data and current chunk number is returned with error, if any.
 // err == nil indicates successful execution.
-func (ag *AesGcmChunk) decryptChunk(encryptedData []byte, ivAndChNum []byte) (decryptedData []byte, currChunkNum uint16, err error) {
-	// Split IV with current chunk number
-	iv := ivAndChNum[:IvSize]
-	// Convert chunk number bytes to uint16
-	currChunkNum = util.ByteToUint16(ivAndChNum[IvSize:])
+func (ag *AesGcmChunk) decryptChunk(encryptedData []byte, iv []byte) (decryptedData []byte, currChunkNum uint16, err error) {
 	// Decrypt data
 	decryptedData, err = ag.decryptBytes(encryptedData, iv)
 	if err != nil {
@@ -404,17 +390,21 @@ func (ag *AesGcmChunk) decryptChunk(encryptedData []byte, ivAndChNum []byte) (de
 		return nil, 0, err
 	}
 
+	// Convert chunk number bytes to uint16 (first two bytes)
+	currChunkNum = util.ByteToUint16(decryptedData[:2])
+	decryptedFileChunk := decryptedData[2:]
+
 	// If chunk was received in incorrect order, raise error
 	if ag.writeChunkNum != currChunkNum {
 		log.Error("Encrypted chunk was received in an incorrect order")
-		return decryptedData, currChunkNum, ChunkIncorrectOrder
+		return decryptedFileChunk, currChunkNum, ChunkIncorrectOrder
 	}
 
 	// Update variables for loop in Decrypt
 	ag.writeChunkNum += 1
-	ag.writeOffset += uint64(len(decryptedData))
+	ag.writeOffset += uint64(len(decryptedFileChunk))
 
-	return decryptedData, currChunkNum, nil
+	return decryptedFileChunk, currChunkNum, nil
 }
 
 // decryptBytes decrypts encryptedData with IV. Decrypted data and error is returned, if any.
