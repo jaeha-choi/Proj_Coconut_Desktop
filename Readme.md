@@ -29,25 +29,25 @@ Provide functions to encrypt/decrypt large files in chunks using AES-GCM and RSA
 - Encryption (AES-GCM + RSA):
 
 ```go
-    ... 
-    streamEncrypt, err := cryptography.EncryptSetup(testFileN)
-    // Error handling
-    err = streamEncrypt.Encrypt(writer, client1PublicKey, client2PrivKey)
-    // Error handling
-    err := streamEncrypt.Close()
-    ...
+... 
+streamEncrypt, err := cryptography.EncryptSetup(testFileN)
+// Error handling
+err = streamEncrypt.Encrypt(writer, client1PublicKey, client2PrivKey)
+// Error handling
+err := streamEncrypt.Close()
+...
 ```
 
 - Decryption (AES-GCM + RSA):
 
 ```go
-    ...
-    streamDecrypt, err := cryptography.DecryptSetup()
-    // Error handling
-    err = streamDecrypt.Decrypt(reader, client2PublicKey, client1PrivKey)
-    // Error handling
-    err := streamDecrypt.Close()
-    ...
+...
+streamDecrypt, err := cryptography.DecryptSetup()
+// Error handling
+err = streamDecrypt.Decrypt(reader, client2PublicKey, client1PrivKey)
+// Error handling
+err := streamDecrypt.Close()
+...
 ```
 
 - Encryption (RSA):
