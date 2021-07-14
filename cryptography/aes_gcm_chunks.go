@@ -125,11 +125,12 @@ func DecryptSetup() (ag *AesGcmChunk, err error) {
 // Packet length, IV and current chunk number are unencrypted. Passive attacker can
 // estimate the file size using chunk number.
 func (ag *AesGcmChunk) Encrypt(writer io.Writer, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) (err error) {
+	keyChNum := append(ag.key, util.Uint16ToByte(ag.chunkCount)...)
 	// Encrypt and sign symmetric encryption key
-	dataEncrypted, dataSignature, err := encryptSignSymKey(ag.key, receiverPubKey, senderPrivKey, util.Uint16ToByte(ag.chunkCount))
+	dataEncrypted, dataSignature, err := EncryptSignMsg(keyChNum, receiverPubKey, senderPrivKey)
 	if err != nil {
 		log.Debug(err)
-		log.Error("Error in encryptSignSymKey")
+		log.Error("Error in EncryptSignMsg")
 		return err
 	}
 
@@ -288,10 +289,10 @@ func (ag *AesGcmChunk) Decrypt(reader io.Reader, senderPubKey *rsa.PublicKey, re
 		return err
 	}
 	// Verify and decrypts symmetric encryption key
-	dataPlain, err := decryptVerifySymKey(dataEncrypted, dataSignature, senderPubKey, receiverPrivKey)
+	dataPlain, err := DecryptVerifyMsg(dataEncrypted, dataSignature, senderPubKey, receiverPrivKey)
 	if err != nil {
 		log.Debug(err)
-		log.Error("Error in decryptVerifySymKey")
+		log.Error("Error in DecryptVerifyMsg")
 		return err
 	}
 
