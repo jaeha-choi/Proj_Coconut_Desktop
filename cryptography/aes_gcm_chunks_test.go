@@ -8,9 +8,8 @@ import (
 )
 
 func TestReadTest(t *testing.T) {
-	//testFileN := "../testdata/cryptography/simple.txt"
-	testFileN := "../testdata/util/checksum.txt"
-	_, privPem, err := OpenKeys()
+	testFileN := "../testdata/checksum.txt"
+	_, privPem, err := OpenKeys("./")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeys")

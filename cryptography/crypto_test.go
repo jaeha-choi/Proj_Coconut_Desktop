@@ -34,7 +34,7 @@ func TestCreateRSAKey(t *testing.T) {
 }
 
 func TestOpenKeys(t *testing.T) {
-	pubPem, privPem, err := OpenKeys()
+	pubPem, privPem, err := OpenKeys("../testdata/keypair1/")
 	if pubPem == nil || privPem == nil || err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeys")
@@ -43,7 +43,7 @@ func TestOpenKeys(t *testing.T) {
 }
 
 func TestPemToKeys(t *testing.T) {
-	pubPem, privPem, err := OpenKeys()
+	pubPem, privPem, err := OpenKeys("../testdata/keypair1/")
 	if pubPem == nil || privPem == nil || err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeys")
@@ -58,7 +58,7 @@ func TestPemToKeys(t *testing.T) {
 }
 
 func TestPemToSha256(t *testing.T) {
-	pubPem, privPem, err := OpenKeys()
+	pubPem, privPem, err := OpenKeys("../testdata/keypair1/")
 	if pubPem == nil || privPem == nil || err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeys")
@@ -85,7 +85,7 @@ func TestBytesToBase64(t *testing.T) {
 
 func TestKeyEncryptSignAESKey(t *testing.T) {
 	// Open Key as PEM
-	_, privPem, err := OpenKeys()
+	_, privPem, err := OpenKeys("../testdata/keypair1/")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeys")
