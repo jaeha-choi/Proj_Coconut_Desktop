@@ -27,7 +27,7 @@ func TestReadBinary(t *testing.T) {
 	destFileNReader := bytes.NewReader([]byte(dstFileN))
 
 	// Create reader for source file
-	srcFileN := "../testdata/util/cat.jpg"
+	srcFileN := "../testdata/cat.jpg"
 
 	srcFileReader, err := os.Open(srcFileN)
 	if err != nil || srcFileReader == nil {
@@ -94,7 +94,7 @@ func TestReadBinary(t *testing.T) {
 func TestReadBinaryEmptyFileNSizeError(t *testing.T) {
 	t.Cleanup(CleanupHelper)
 	// Use super long text for file name
-	dstFileNFile := "../testdata/util/test_8192.txt"
+	dstFileNFile := "../testdata/test_8192.txt"
 	fileNFile, err := os.Open(dstFileNFile)
 	if err != nil {
 		log.Debug(err)
@@ -127,7 +127,7 @@ func TestReadBinaryEmptyFileNError(t *testing.T) {
 	destFileNReader := bytes.NewReader([]byte(dstFileN))
 
 	// Create reader for source file
-	srcFileN := "../testdata/util/cat.jpg"
+	srcFileN := "../testdata/cat.jpg"
 
 	srcFileReader, err := os.Open(srcFileN)
 	if err != nil || srcFileReader == nil {
@@ -168,7 +168,7 @@ func TestReadBinaryIncorrectFileSize(t *testing.T) {
 	destFileNReader := bytes.NewReader([]byte(dstFileN))
 
 	// Create reader for source file
-	srcFileN := "../testdata/util/cat.jpg"
+	srcFileN := "../testdata/cat.jpg"
 
 	srcFileReader, err := os.Open(srcFileN)
 	if err != nil || srcFileReader == nil {
@@ -202,7 +202,7 @@ func TestReadBinaryShortReader(t *testing.T) {
 	destFileNReader := bytes.NewReader([]byte(dstFileN))
 
 	// Create reader for source file
-	srcFileN := "../testdata/util/cat.jpg"
+	srcFileN := "../testdata/cat.jpg"
 
 	srcFileReader, err := os.Open(srcFileN)
 	if err != nil || srcFileReader == nil {
@@ -307,7 +307,7 @@ func TestWriteString(t *testing.T) {
 
 func TestReadNBinary(t *testing.T) {
 	t.Cleanup(CleanupHelper)
-	testFileN := "../testdata/util/cat.jpg"
+	testFileN := "../testdata/cat.jpg"
 	resultFileN := "cat_result.jpg"
 
 	// Open original image
@@ -368,7 +368,7 @@ func TestReadNBinary(t *testing.T) {
 func TestReadNBinaryTiny(t *testing.T) {
 	t.Cleanup(CleanupHelper)
 
-	testFileN := "../testdata/util/pine_cone.jpg"
+	testFileN := "../testdata/pine_cone.jpg"
 	resultFileN := "pine_cone_result.jpg"
 
 	// Open original image
@@ -428,7 +428,7 @@ func TestReadNBinaryTiny(t *testing.T) {
 
 func TestReadWriteBinary(t *testing.T) {
 	t.Cleanup(CleanupHelper)
-	srcFileN := "../testdata/util/cat.jpg"
+	srcFileN := "../testdata/cat.jpg"
 	var buffer bytes.Buffer
 
 	// Test WriteBinary
@@ -470,7 +470,7 @@ func TestReadWriteBinary(t *testing.T) {
 
 func TestReadNBinaryCreateDirError(t *testing.T) {
 	t.Cleanup(CleanupHelper)
-	testFileN := "../testdata/util/cat.jpg"
+	testFileN := "../testdata/cat.jpg"
 	resultFileN := "cat_result.jpg"
 
 	// Open original image
@@ -517,7 +517,7 @@ func TestReadNBinaryCreateDirError(t *testing.T) {
 
 func TestReadNBinaryTinyWrongSize(t *testing.T) {
 	t.Cleanup(CleanupHelper)
-	testFileN := "../testdata/util/pine_cone.jpg"
+	testFileN := "../testdata/pine_cone.jpg"
 	resultFileN := "pine_cone_result.jpg"
 
 	// Open original image
@@ -549,7 +549,7 @@ func TestReadNBinaryTinyWrongSize(t *testing.T) {
 
 func TestReadNBinaryTinyWrongSize2(t *testing.T) {
 	t.Cleanup(CleanupHelper)
-	testFileN := "../testdata/util/cat.jpg"
+	testFileN := "../testdata/cat.jpg"
 	resultFileN := "cat_result.jpg"
 
 	// Open original image
@@ -611,7 +611,7 @@ func TestReadStringSizeError(t *testing.T) {
 
 func TestReadStringSizeMax(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/util/test_4096.txt")
+	file, err := os.Open("../testdata/test_4096.txt")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Cannot read the input file")
@@ -662,7 +662,7 @@ func TestReadStringSizeMax(t *testing.T) {
 
 func TestReadStringSizeExceedMax(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/util/test_8192.txt")
+	file, err := os.Open("../testdata/test_8192.txt")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Cannot read the input file")
@@ -826,7 +826,7 @@ func TestReadNString(t *testing.T) {
 
 func TestReadNStringBufferSize(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/util/test_4096.txt")
+	file, err := os.Open("../testdata/test_4096.txt")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Cannot read the input file")
@@ -911,7 +911,7 @@ func TestReadNStringBufferSize(t *testing.T) {
 
 func TestReadNStringMaxSizePlugOne(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/util/test_4096.txt")
+	file, err := os.Open("../testdata/test_4096.txt")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Cannot read the input file")
@@ -946,7 +946,7 @@ func TestReadNStringMaxSizePlugOne(t *testing.T) {
 
 func TestReadNStringBufferSizeMinusOne(t *testing.T) {
 	// Open input file for testing
-	file, err := os.Open("../testdata/util/test_4096.txt")
+	file, err := os.Open("../testdata/test_4096.txt")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Cannot read the input file")
