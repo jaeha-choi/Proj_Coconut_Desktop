@@ -11,6 +11,7 @@ import (
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 )
 
 const (
@@ -31,9 +32,9 @@ func createRSAKey(bitSize int) (privKey *rsa.PrivateKey, err error) {
 
 // OpenKeys open existing keys and return them as *pem.Block.
 // If keys are not found, new keys will be created.
-func OpenKeys() (pubBlock *pem.Block, privBlock *pem.Block, err error) {
-	pubFileN := "key.pub"
-	privFileN := "key.priv"
+func OpenKeys(keyPath string) (pubBlock *pem.Block, privBlock *pem.Block, err error) {
+	pubFileN := filepath.Join(keyPath, "key.pub")
+	privFileN := filepath.Join(keyPath, "key.priv")
 
 	// Check if keys already exist
 	if _, err := os.Stat(pubFileN); !os.IsNotExist(err) {
@@ -66,7 +67,12 @@ func OpenKeys() (pubBlock *pem.Block, privBlock *pem.Block, err error) {
 			return nil, nil, err
 		}
 	} else if os.IsNotExist(err) {
-		log.Debug(err)
+		// Create directory if it doesn't exist
+		if err := os.MkdirAll(keyPath, os.ModePerm); err != nil {
+			log.Debug(err)
+			log.Error("Error while creating key directory")
+			return nil, nil, err
+		}
 		// Create new RSA key pair
 		key, err := createRSAKey(rsaKeyBitSize)
 		if err != nil {
