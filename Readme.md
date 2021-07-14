@@ -8,10 +8,15 @@
 Contains simple wrapper methods to support level-based logging.
 
 #### Usage
+```go
+import "github.com/jaeha-choi/Proj_Coconut_Utility/log"
 
-1. Import package: `import "github.com/jaeha-choi/Proj_Coconut_Utility/log"`
-2. Initialize the logger: `log.Init(os.Stdout, log.DEBUG)`
-3. Use one of the level to log: `log.Error(err)`
+// Initialize logger
+log.Init(os.Stdout, log.Error) 
+
+log.Debug("Debug msg") // Won't print; Mode is set to log.Error
+log.Error(err)
+```
 
 ### `util` package
 
