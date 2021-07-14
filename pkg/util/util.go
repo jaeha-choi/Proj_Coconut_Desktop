@@ -47,6 +47,8 @@ func ReadString(reader io.Reader) (string, error) {
 	return str, nil
 }
 
+// ReadBytes reads b from reader.
+// Returns error, if any.
 func ReadBytes(reader io.Reader) (b []byte, err error) {
 	// Read packet size
 	size, err := readSize(reader)
@@ -110,6 +112,8 @@ func WriteString(writer io.Writer, msg string) (int, error) {
 	return WriteBytes(writer, []byte(msg))
 }
 
+// WriteBytes write b to writer.
+// Returns int indicating the number of bytes written, and error, if any.
 func WriteBytes(writer io.Writer, b []byte) (n int, err error) {
 	//// Return error if b is too big
 	//if len(b) > BufferSize {
@@ -223,6 +227,7 @@ func Uint16ToByte(size uint16) []byte {
 	return b
 }
 
+// ByteToUint16 converts byte slices to uint16
 func ByteToUint16(b []byte) uint16 {
 	return binary.BigEndian.Uint16(b)
 }

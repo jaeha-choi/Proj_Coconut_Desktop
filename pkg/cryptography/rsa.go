@@ -188,21 +188,20 @@ func genSymKey() (key []byte, err error) {
 	return key, nil
 }
 
-// encryptSignSymKey encrypts key for symmetric encryption with receiver's pubic key,
+// EncryptSignMsg encrypts key for symmetric encryption with receiver's pubic key,
 // and sign hashed symmetric encryption key with sender's private key.
-func encryptSignSymKey(symKey []byte, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey, additional []byte) (
+func EncryptSignMsg(msg []byte, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) (
 	encryptedData []byte, dataSignature []byte, err error) {
 	rng := rand.Reader
-	data := append(symKey, additional...)
 	// Encrypt symmetric encryption key
-	if encryptedData, err = rsa.EncryptOAEP(sha256.New(), rng, receiverPubKey, data, nil); err != nil {
+	if encryptedData, err = rsa.EncryptOAEP(sha256.New(), rng, receiverPubKey, msg, nil); err != nil {
 		log.Debug(err)
 		log.Error("Error while encrypting symmetric encryption key")
 		return nil, nil, err
 	}
 
 	// Sign symmetric encryption key
-	hashedKey := sha256.Sum256(data)
+	hashedKey := sha256.Sum256(msg)
 	if dataSignature, err = rsa.SignPSS(rng, senderPrivKey, crypto.SHA256, hashedKey[:], nil); err != nil {
 		log.Debug(err)
 		log.Error("Error while signing symmetric encryption key")
@@ -212,14 +211,14 @@ func encryptSignSymKey(symKey []byte, receiverPubKey *rsa.PublicKey, senderPrivK
 	return encryptedData, dataSignature, nil
 }
 
-// decryptVerifySymKey decrypts key for symmetric encryption with receiver's private key,
+// DecryptVerifyMsg decrypts key for symmetric encryption with receiver's private key,
 // and verify signature with sender's public key.
-func decryptVerifySymKey(encrypted []byte, signature []byte, senderPubKey *rsa.PublicKey, receiverPrivKey *rsa.PrivateKey) (
+func DecryptVerifyMsg(encryptedMsg []byte, signature []byte, senderPubKey *rsa.PublicKey, receiverPrivKey *rsa.PrivateKey) (
 	symKey []byte, err error) {
 	rng := rand.Reader
 
 	// Decrypt symmetric encryption key
-	if symKey, err = rsa.DecryptOAEP(sha256.New(), rng, receiverPrivKey, encrypted, nil); err != nil {
+	if symKey, err = rsa.DecryptOAEP(sha256.New(), rng, receiverPrivKey, encryptedMsg, nil); err != nil {
 		log.Debug(err)
 		log.Error("Error while decrypting symmetric encryption key")
 		return nil, err
