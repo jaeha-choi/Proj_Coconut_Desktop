@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestReadTest(t *testing.T) {
+func TestEncryptDecrypt(t *testing.T) {
 	t.Cleanup(func() {
 		if err := os.RemoveAll(util.DownloadPath); err != nil {
 			log.Debug(err)
@@ -93,14 +93,16 @@ func TestReadTest(t *testing.T) {
 		t.Error("Error in Decrypt")
 		return
 	}
-	if err := streamDecrypt.Close(); err != nil {
-		log.Debug(err)
-		t.Error("Error in Close")
-		return
-	}
+	defer func() {
+		if err := streamDecrypt.Close(); err != nil {
+			log.Debug(err)
+			t.Error("Error in Close")
+			return
+		}
+	}()
 }
 
-func TestReadTest2(t *testing.T) {
+func TestEncryptDecrypt2(t *testing.T) {
 	t.Cleanup(func() {
 		if err := os.RemoveAll(util.DownloadPath); err != nil {
 			log.Debug(err)
@@ -197,11 +199,13 @@ func TestReadTest2(t *testing.T) {
 		t.Error("Error in Decrypt")
 		return
 	}
-	if err := streamDecrypt.Close(); err != nil {
-		log.Debug(err)
-		t.Error("Error in Close")
-		return
-	}
+	defer func() {
+		if err := streamDecrypt.Close(); err != nil {
+			log.Debug(err)
+			t.Error("Error in Close")
+			return
+		}
+	}()
 
 	srcFile, err := os.Open(testFileN)
 	if err != nil {
