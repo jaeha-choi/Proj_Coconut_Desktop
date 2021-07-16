@@ -1,0 +1,334 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Generated with glade 3.38.2 -->
+<interface>
+  <requires lib="gtk+" version="3.24"/>
+  <object class="GtkListStore" id="fileList">
+    <columns>
+      <!-- column-name Selected -->
+      <column type="gboolean"/>
+      <!-- column-name Filename -->
+      <column type="gchararray"/>
+      <!-- column-name Size -->
+      <column type="guint64"/>
+      <!-- column-name Date -->
+      <column type="gchararray"/>
+      <!-- column-name Path -->
+      <column type="gchararray"/>
+    </columns>
+    <data>
+      <row>
+        <col id="0">True</col>
+        <col id="1" translatable="yes">cat.jpg</col>
+        <col id="2">5953</col>
+        <col id="3" translatable="yes">2021/06/23</col>
+        <col id="4" translatable="yes">/home/jaeha/cat_photos</col>
+      </row>
+      <row>
+        <col id="0">False</col>
+        <col id="1" translatable="yes">resume.pdf</col>
+        <col id="2">1360</col>
+        <col id="3" translatable="yes">2021/07/01</col>
+        <col id="4" translatable="yes">/home/jaeha/docs</col>
+      </row>
+    </data>
+  </object>
+  <object class="GtkWindow" id="main_window">
+    <property name="can-focus">False</property>
+    <property name="resizable">False</property>
+    <property name="default-width">500</property>
+    <property name="default-height">700</property>
+    <child>
+      <object class="GtkBox">
+        <property name="visible">True</property>
+        <property name="can-focus">False</property>
+        <property name="orientation">vertical</property>
+        <child>
+          <object class="GtkHeaderBar" id="titlebar">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <property name="spacing">4</property>
+            <property name="show-close-button">True</property>
+            <child type="title">
+              <object class="GtkListBox">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="selection-mode">none</property>
+                <property name="activate-on-single-click">False</property>
+                <child>
+                  <object class="GtkListBoxRow">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="activatable">False</property>
+                    <property name="selectable">False</property>
+                    <child>
+                      <object class="GtkLabel">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="label" translatable="yes">Project Coconut</property>
+                        <property name="track-visited-links">False</property>
+                        <attributes>
+                          <attribute name="weight" value="bold"/>
+                        </attributes>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+                <child>
+                  <object class="GtkListBoxRow">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <child>
+                      <object class="GtkLabel" id="connection_status_label">
+                        <property name="visible">True</property>
+                        <property name="can-focus">False</property>
+                        <property name="tooltip-text" translatable="yes">Click to change status</property>
+                        <property name="label" translatable="yes">Online</property>
+                        <property name="justify">center</property>
+                        <property name="track-visited-links">False</property>
+                        <attributes>
+                          <attribute name="foreground" value="#2626a2a26969"/>
+                        </attributes>
+                      </object>
+                    </child>
+                  </object>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="send_button">
+                <property name="label" translatable="yes">Send</property>
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="receives-default">True</property>
+                <property name="relief">none</property>
+              </object>
+            </child>
+            <child>
+              <object class="GtkButton" id="add_files_button">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="receives-default">True</property>
+                <property name="relief">none</property>
+                <child>
+                  <object class="GtkImage" id="add_icon">
+                    <property name="visible">True</property>
+                    <property name="can-focus">True</property>
+                    <property name="icon-name">list-add</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkMenuButton" id="menu_button">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="focus-on-click">False</property>
+                <property name="receives-default">True</property>
+                <property name="relief">none</property>
+                <child>
+                  <object class="GtkImage" id="menu_icon">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="icon-name">view-more-symbolic</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="pack-type">end</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkToggleButton" id="view_toggle_button">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="receives-default">True</property>
+                <property name="relief">none</property>
+                <child>
+                  <object class="GtkImage" id="image1">
+                    <property name="visible">True</property>
+                    <property name="can-focus">False</property>
+                    <property name="icon-name">view-list-bullet-symbolic</property>
+                  </object>
+                </child>
+              </object>
+              <packing>
+                <property name="pack-type">end</property>
+                <property name="position">3</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">0</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkTreeView" id="file_list">
+            <property name="visible">True</property>
+            <property name="can-focus">True</property>
+            <property name="model">fileList</property>
+            <property name="enable-grid-lines">horizontal</property>
+            <child>
+              <object class="GtkTreeViewColumn" id="fileDeselect">
+                <child>
+                  <object class="GtkCellRendererToggle" id="selectToggle"/>
+                  <attributes>
+                    <attribute name="active">0</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="fileName">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes">Filename</property>
+                <property name="expand">True</property>
+                <property name="clickable">True</property>
+                <property name="sort-indicator">True</property>
+                <child>
+                  <object class="GtkCellRendererText"/>
+                  <attributes>
+                    <attribute name="text">1</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="fileSize">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes">Size</property>
+                <property name="clickable">True</property>
+                <property name="sort-indicator">True</property>
+                <child>
+                  <object class="GtkCellRendererText"/>
+                  <attributes>
+                    <attribute name="text">2</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="fileDate">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes">Date</property>
+                <property name="clickable">True</property>
+                <property name="sort-indicator">True</property>
+                <child>
+                  <object class="GtkCellRendererText"/>
+                  <attributes>
+                    <attribute name="text">3</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+            <child>
+              <object class="GtkTreeViewColumn" id="filePath">
+                <property name="resizable">True</property>
+                <property name="title" translatable="yes">Path</property>
+                <property name="expand">True</property>
+                <property name="clickable">True</property>
+                <property name="sort-indicator">True</property>
+                <child>
+                  <object class="GtkCellRendererText"/>
+                  <attributes>
+                    <attribute name="text">4</attribute>
+                  </attributes>
+                </child>
+              </object>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">True</property>
+            <property name="fill">True</property>
+            <property name="position">1</property>
+          </packing>
+        </child>
+        <child>
+          <object class="GtkBox">
+            <property name="visible">True</property>
+            <property name="can-focus">False</property>
+            <child>
+              <object class="GtkLabel">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="margin-start">5</property>
+                <property name="margin-end">2</property>
+                <property name="margin-top">5</property>
+                <property name="margin-bottom">5</property>
+                <property name="label" translatable="yes">Selected File(s):</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">0</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel" id="file_count_label">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="margin-start">5</property>
+                <property name="margin-end">2</property>
+                <property name="margin-top">5</property>
+                <property name="margin-bottom">5</property>
+                <property name="label" translatable="yes">3</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="position">1</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="margin-start">2</property>
+                <property name="margin-end">5</property>
+                <property name="margin-top">5</property>
+                <property name="margin-bottom">5</property>
+                <property name="label" translatable="yes">7 MB</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="pack-type">end</property>
+                <property name="position">2</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkLabel">
+                <property name="visible">True</property>
+                <property name="can-focus">False</property>
+                <property name="margin-start">2</property>
+                <property name="margin-end">5</property>
+                <property name="margin-top">5</property>
+                <property name="margin-bottom">5</property>
+                <property name="label" translatable="yes">Total Size:</property>
+              </object>
+              <packing>
+                <property name="expand">False</property>
+                <property name="fill">True</property>
+                <property name="pack-type">end</property>
+                <property name="position">3</property>
+              </packing>
+            </child>
+          </object>
+          <packing>
+            <property name="expand">False</property>
+            <property name="fill">True</property>
+            <property name="position">2</property>
+          </packing>
+        </child>
+      </object>
+    </child>
+    <child type="titlebar">
+      <placeholder/>
+    </child>
+  </object>
+</interface>
