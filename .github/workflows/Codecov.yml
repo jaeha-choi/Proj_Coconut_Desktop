@@ -30,7 +30,7 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Install dependencies
-        run: go get gopkg.in/yaml.v3
+        run: go mod download
 
       - name: Generate coverage.txt
         run: go test -v ./... -race -coverprofile=coverage.txt -covermode=atomic

@@ -35,7 +35,7 @@ jobs:
             ${{ runner.os }}-go-
 
       - name: Install dependencies
-        run: go get gopkg.in/yaml.v3
+        run: go mod download
 
       - name: Build
         run: go build -v ./...
