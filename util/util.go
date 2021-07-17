@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
+	"gopkg.in/yaml.v3"
 	"io"
 	"io/ioutil"
 	"net"
@@ -390,4 +391,36 @@ func IntToUint32(n int64) (uint32, error) {
 // CheckIPAddress check if ip address is valid or not
 func CheckIPAddress(ip string) bool {
 	return net.ParseIP(ip) != nil
+}
+
+// WriteConfig writes config to fileName in yaml format
+func WriteConfig(fileName string, config *interface{}) (err error) {
+	dstFile, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while creating file for config")
+		return err
+	}
+	defer func() {
+		if err := dstFile.Close(); err != nil {
+			log.Debug(err)
+			log.Error("Error while closing config file")
+			return
+		}
+	}()
+
+	marshal, err := yaml.Marshal(&config)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while converting serv struct to []byte")
+		return err
+	}
+
+	if _, err := dstFile.Write(marshal); err != nil {
+		log.Debug(err)
+		log.Error("Error while writing config file")
+		return err
+	}
+
+	return nil
 }
