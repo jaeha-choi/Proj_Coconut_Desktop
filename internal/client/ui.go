@@ -12,14 +12,6 @@ const (
 	appId = "dev.jaeha.coconut"
 )
 
-// Client contains information about each client devices
-type Client struct {
-	PublicIp    string `json:"publicIp"`
-	PrivateIp   string `json:"privateIp"`
-	PublicPort  string `json:"publicPort"`
-	PrivatePort string `json:"privatePort"`
-}
-
 var AssertFailed = errors.New("type assertion failed")
 
 func Start(uiGladePath string) {
