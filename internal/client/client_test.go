@@ -11,5 +11,13 @@ func init() {
 }
 
 func TestConnect(t *testing.T) {
-	Connect()
+	client, err := NewClient()
+	if err != nil {
+		t.Error(err)
+	}
+	err = client.Connect()
+	if err != nil {
+		t.Error(err)
+		return
+	}
 }
