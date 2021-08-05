@@ -31,7 +31,6 @@
     <property name="resizable">False</property>
     <property name="default-width">500</property>
     <property name="default-height">700</property>
-    <signal name="key-press-event" handler="keyPressMainWin" swapped="no"/>
     <child>
       <object class="GtkNotebook" id="pager">
         <property name="visible">True</property>
@@ -60,6 +59,8 @@
                     <property name="search-column">0</property>
                     <property name="rubber-banding">True</property>
                     <property name="enable-grid-lines">horizontal</property>
+                    <property name="tooltip-column">3</property>
+                    <signal name="key-press-event" handler="keyPressFileList" swapped="no"/>
                     <child internal-child="selection">
                       <object class="GtkTreeSelection" id="fileSelected">
                         <property name="mode">multiple</property>
@@ -229,7 +230,7 @@
           </packing>
         </child>
         <child>
-          <object class="GtkBox">
+          <object class="GtkBox" id="contactBox">
             <property name="visible">True</property>
             <property name="can-focus">False</property>
             <property name="orientation">vertical</property>
@@ -283,10 +284,12 @@
               </packing>
             </child>
             <child>
-              <object class="GtkExpander">
+              <object class="GtkExpander" id="addCodeExpander">
                 <property name="visible">True</property>
+                <property name="sensitive">False</property>
                 <property name="can-focus">True</property>
                 <property name="valign">end</property>
+                <signal name="activate" handler="activateExpander" swapped="no"/>
                 <child>
                   <object class="GtkBox">
                     <property name="visible">True</property>
@@ -300,7 +303,6 @@
                         <property name="hexpand">True</property>
                         <property name="vexpand">True</property>
                         <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;Your Add Code&lt;/span&gt;
-Click here to copy your Add Code.
 Add Code is active only when this panel is open.</property>
                         <property name="use-markup">True</property>
                         <property name="justify">center</property>
@@ -314,7 +316,7 @@ Add Code is active only when this panel is open.</property>
                     </child>
                     <child>
                       <!-- n-columns=6 n-rows=1 -->
-                      <object class="GtkGrid">
+                      <object class="GtkGrid" id="addCodeGrid">
                         <property name="visible">True</property>
                         <property name="can-focus">False</property>
                         <property name="valign">center</property>
@@ -331,7 +333,7 @@ Add Code is active only when this panel is open.</property>
                           <object class="GtkLabel">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;0&lt;/span&gt;</property>
+                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;-&lt;/span&gt;</property>
                             <property name="use-markup">True</property>
                           </object>
                           <packing>
@@ -343,7 +345,7 @@ Add Code is active only when this panel is open.</property>
                           <object class="GtkLabel">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;0&lt;/span&gt;</property>
+                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;-&lt;/span&gt;</property>
                             <property name="use-markup">True</property>
                           </object>
                           <packing>
@@ -355,7 +357,7 @@ Add Code is active only when this panel is open.</property>
                           <object class="GtkLabel">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;0&lt;/span&gt;</property>
+                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;-&lt;/span&gt;</property>
                             <property name="use-markup">True</property>
                           </object>
                           <packing>
@@ -367,7 +369,7 @@ Add Code is active only when this panel is open.</property>
                           <object class="GtkLabel">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;0&lt;/span&gt;</property>
+                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;-&lt;/span&gt;</property>
                             <property name="use-markup">True</property>
                           </object>
                           <packing>
@@ -379,7 +381,7 @@ Add Code is active only when this panel is open.</property>
                           <object class="GtkLabel">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;0&lt;/span&gt;</property>
+                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;-&lt;/span&gt;</property>
                             <property name="use-markup">True</property>
                           </object>
                           <packing>
@@ -391,7 +393,7 @@ Add Code is active only when this panel is open.</property>
                           <object class="GtkLabel">
                             <property name="visible">True</property>
                             <property name="can-focus">False</property>
-                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;0&lt;/span&gt;</property>
+                            <property name="label" translatable="yes">&lt;span size="xx-large" weight="bold"&gt;-&lt;/span&gt;</property>
                             <property name="use-markup">True</property>
                           </object>
                           <packing>
@@ -409,10 +411,10 @@ Add Code is active only when this panel is open.</property>
                   </object>
                 </child>
                 <child type="label">
-                  <object class="GtkLabel">
+                  <object class="GtkLabel" id="expanderLabel">
                     <property name="visible">True</property>
                     <property name="can-focus">False</property>
-                    <property name="label" translatable="yes">Show/Hide Add Code</property>
+                    <property name="label" translatable="yes">Switch online to get Add Code</property>
                   </object>
                 </child>
               </object>

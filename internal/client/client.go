@@ -34,6 +34,8 @@ var UnexpectedError = errors.New("unexpected command returned")
 
 var ReceiverNotFound = errors.New("receiver was not found")
 
+var TaskNotCompleteError = errors.New("task not complete")
+
 func init() {
 	log.Init(os.Stdout, log.DEBUG)
 }
@@ -66,25 +68,29 @@ func (client *Client) HandleRequestPubKey() {
 
 }
 
-func (client *Client) DoInit() (isComplete bool, err error) {
-	if client.conn != nil {
-		// Client already established active connection
-		return false, ExistingConnError
-	}
+func (client *Client) doInit() (isComplete bool, err error) {
 	pubKeyHash := cryptography.PemToSha256(client.pubKeyBlock)
 	if _, err = util.WriteBytes(client.conn, pubKeyHash); err != nil {
 		log.Debug(err)
+		log.Error("Error while init command")
 		return false, err
 	}
-	response, err := client.getResult(client.conn)
-	if err != nil || !response {
+
+	return client.getResult(client.conn)
+}
+
+func (client *Client) doQuit() (isComplete bool, err error) {
+	if _, err = util.WriteString(client.conn, commands.Quit); err != nil {
+		log.Debug(err)
+		log.Error("Error while quit command")
 		return false, err
 	}
+
 	return client.getResult(client.conn)
 }
 
 func (client *Client) DoGetAddCode() (isComplete bool, err error) {
-	if _, err := util.WriteString(client.conn, commands.GetAddCode); err != nil {
+	if _, err = util.WriteString(client.conn, commands.GetAddCode); err != nil {
 		return false, err
 	}
 	addCode, err := util.ReadBytes(client.conn)
@@ -92,9 +98,6 @@ func (client *Client) DoGetAddCode() (isComplete bool, err error) {
 		return false, err
 	}
 	client.addCode = string(addCode)
-	if isComplete, err = client.getResult(client.conn); err != nil || !isComplete {
-		return false, err
-	}
 	return client.getResult(client.conn)
 }
 
@@ -159,6 +162,10 @@ func (client *Client) getResult(conn net.Conn) (isAffirmation bool, err error) {
 }
 
 func (client *Client) Connect() (err error) {
+	if client.conn != nil {
+		// Client already established active connection
+		return ExistingConnError
+	}
 	dial, err := tls.Dial("tcp", client.ServerIp+":"+strconv.Itoa(int(client.ServerPort)), client.tlsConfig)
 	if err != nil {
 		log.Debug(err)
@@ -166,5 +173,32 @@ func (client *Client) Connect() (err error) {
 		return err
 	}
 	client.conn = dial
+
+	isComplete, err := client.doInit()
+	if !isComplete {
+		log.Debug(err)
+		log.Error("Task is not complete")
+		return TaskNotCompleteError
+	}
+
+	return nil
+}
+
+func (client *Client) Disconnect() (err error) {
+	if client.conn == nil {
+		return nil
+	}
+	isComplete, err := client.doQuit()
+	if !isComplete {
+		log.Debug(err)
+		log.Error("Task is not complete")
+		return TaskNotCompleteError
+	}
+	if err = client.conn.Close(); err != nil {
+		log.Debug(err)
+		log.Error("Error while disconnecting from the server")
+		return err
+	}
+	client.conn = nil
 	return nil
 }
