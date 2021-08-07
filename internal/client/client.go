@@ -4,8 +4,7 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"encoding/pem"
-	"errors"
-	"github.com/jaeha-choi/Proj_Coconut_Utility/commands"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/common"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
@@ -27,14 +26,6 @@ type Client struct {
 	conn        net.Conn
 	addCode     string
 }
-
-var ExistingConnError = errors.New("existing connection present in client struct")
-
-var UnexpectedError = errors.New("unexpected command returned")
-
-var ReceiverNotFound = errors.New("receiver was not found")
-
-var TaskNotCompleteError = errors.New("task not complete")
 
 func init() {
 	log.Init(os.Stdout, log.DEBUG)
@@ -68,103 +59,90 @@ func (client *Client) HandleRequestPubKey() {
 
 }
 
-func (client *Client) doInit() (isComplete bool, err error) {
+func (client *Client) doInit() (err error) {
 	pubKeyHash := cryptography.PemToSha256(client.pubKeyBlock)
-	if _, err = util.WriteBytes(client.conn, pubKeyHash); err != nil {
+	if _, err = util.WriteBytes(client.conn, pubKeyHash, nil); err != nil {
 		log.Debug(err)
 		log.Error("Error while init command")
-		return false, err
+		return err
 	}
 
 	return client.getResult(client.conn)
 }
 
-func (client *Client) doQuit() (isComplete bool, err error) {
-	if _, err = util.WriteString(client.conn, commands.Quit); err != nil {
+func (client *Client) doQuit() (err error) {
+	if _, err = util.WriteString(client.conn, common.Quit.String(), nil); err != nil {
 		log.Debug(err)
 		log.Error("Error while quit command")
-		return false, err
+		return err
 	}
 
 	return client.getResult(client.conn)
 }
 
-func (client *Client) DoGetAddCode() (isComplete bool, err error) {
-	if _, err = util.WriteString(client.conn, commands.GetAddCode); err != nil {
-		return false, err
+func (client *Client) DoGetAddCode() (err error) {
+	if _, err = util.WriteString(client.conn, common.GetAddCode.String(), nil); err != nil {
+		return err
 	}
 	addCode, err := util.ReadBytes(client.conn)
 	if err != nil {
-		return false, err
+		return err
 	}
 	client.addCode = string(addCode)
+
 	return client.getResult(client.conn)
 }
 
-func (client *Client) DoRemoveAddCode() (isComplete bool, err error) {
-	if _, err := util.WriteString(client.conn, commands.RemoveAddCode); err != nil {
-		return false, err
+func (client *Client) DoRemoveAddCode() (err error) {
+	if _, err = util.WriteString(client.conn, common.RemoveAddCode.String(), nil); err != nil {
+		return err
 	}
-	if _, err := util.WriteString(client.conn, client.addCode); err != nil {
-		return false, err
+	if _, err = util.WriteString(client.conn, client.addCode, nil); err != nil {
+		return err
 	}
+
 	return client.getResult(client.conn)
 }
 
-func (client *Client) DoRequestRelay(rxPubKeyHash string) (isComplete bool, err error) {
-	if _, err := util.WriteString(client.conn, commands.RequestRelay); err != nil {
-		return false, err
+func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
+	if _, err = util.WriteString(client.conn, common.RequestRelay.String(), nil); err != nil {
+		return err
 	}
-	if _, err := util.WriteString(client.conn, rxPubKeyHash); err != nil {
-		return false, err
-	}
-	isRxFound, err := client.getResult(client.conn)
-	if err != nil {
-		return false, err
-	}
-	if !isRxFound {
-		return false, ReceiverNotFound
+	if _, err = util.WriteString(client.conn, rxPubKeyHash, nil); err != nil {
+		return err
 	}
 	// TODO: Finish implementing
+
 	return client.getResult(client.conn)
 }
 
-func (client *Client) DoGetPubKey(rxAddCodeStr string, fileName string) (isComplete bool, err error) {
-	if _, err := util.WriteString(client.conn, commands.GetPubKey); err != nil {
-		return false, err
+func (client *Client) DoGetPubKey(rxAddCodeStr string, fileName string) (err error) {
+	if _, err = util.WriteString(client.conn, common.GetPubKey.String(), nil); err != nil {
+		return err
 	}
-	if _, err := util.WriteString(client.conn, rxAddCodeStr); err != nil {
-		return false, err
+	if _, err = util.WriteString(client.conn, rxAddCodeStr, nil); err != nil {
+		return err
 	}
 	rxPubKeyBytes, err := util.ReadBytes(client.conn)
 	if err != nil {
-		return false, err
+		return err
 	}
 	if err = cryptography.BytesToPemFile(rxPubKeyBytes, fileName); err != nil {
-		return false, err
+		return err
 	}
+
 	return client.getResult(client.conn)
 }
 
-func (client *Client) getResult(conn net.Conn) (isAffirmation bool, err error) {
-	bytes, err := util.ReadString(conn)
-	if err != nil {
-		return false, err
-	}
-	switch bytes {
-	case commands.Affirmation:
-		return true, nil
-	case commands.Negation:
-		return false, nil
-	default:
-		return false, UnexpectedError
-	}
+func (client *Client) getResult(conn net.Conn) (err error) {
+	_, err = util.ReadBytes(conn)
+	return err
 }
 
 func (client *Client) Connect() (err error) {
 	if client.conn != nil {
 		// Client already established active connection
-		return ExistingConnError
+		return common.ExistingConnError
 	}
 	dial, err := tls.Dial("tcp", client.ServerIp+":"+strconv.Itoa(int(client.ServerPort)), client.tlsConfig)
 	if err != nil {
@@ -174,11 +152,10 @@ func (client *Client) Connect() (err error) {
 	}
 	client.conn = dial
 
-	isComplete, err := client.doInit()
-	if !isComplete {
+	if err = client.doInit(); err != nil {
 		log.Debug(err)
 		log.Error("Task is not complete")
-		return TaskNotCompleteError
+		return common.TaskNotCompleteError
 	}
 
 	return nil
@@ -188,11 +165,10 @@ func (client *Client) Disconnect() (err error) {
 	if client.conn == nil {
 		return nil
 	}
-	isComplete, err := client.doQuit()
-	if !isComplete {
+	if err = client.doQuit(); err != nil {
 		log.Debug(err)
 		log.Error("Task is not complete")
-		return TaskNotCompleteError
+		return common.TaskNotCompleteError
 	}
 	if err = client.conn.Close(); err != nil {
 		log.Debug(err)
