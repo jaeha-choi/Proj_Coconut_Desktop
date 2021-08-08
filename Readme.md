@@ -1,4 +1,4 @@
-# Server for Project Coconut
+# Desktop Client for Project Coconut
 
 [![CI](https://github.com/jaeha-choi/Proj_Coconut_Desktop/actions/workflows/CI.yml/badge.svg)](https://github.com/jaeha-choi/Proj_Coconut_Desktop/actions/workflows/CI.yml)
 
