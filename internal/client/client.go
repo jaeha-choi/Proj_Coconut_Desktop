@@ -118,7 +118,7 @@ func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
 }
 
 func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err error) {
-	if _, err = util.WriteString(client.conn, common.GetPubKey.String()); err != nil {
+	if _, err = util.WriteString(client.conn, common.RequestPubKey.String()); err != nil {
 		return err
 	}
 	if _, err = util.WriteString(client.conn, rxAddCodeStr); err != nil {
@@ -138,7 +138,6 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 
 func (client *Client) getResult(conn net.Conn) (err error) {
 	_, err = util.ReadBytes(conn)
-
 	return err
 }
 
@@ -147,6 +146,7 @@ func (client *Client) Connect() (err error) {
 		// Client already established active connection
 		return common.ExistingConnError
 	}
+	log.Debug("Connecting...")
 	dial, err := tls.Dial("tcp", client.ServerIp+":"+strconv.Itoa(int(client.ServerPort)), client.tlsConfig)
 	if err != nil {
 		log.Debug(err)
@@ -162,6 +162,7 @@ func (client *Client) Disconnect() (err error) {
 	if client.conn == nil {
 		return nil
 	}
+	log.Debug("Disconnecting...")
 	if err = client.doQuit(); err != nil {
 		log.Debug(err)
 		log.Error("Task is not complete")

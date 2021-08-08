@@ -80,6 +80,8 @@ func Start(uiGladePath string) {
 
 	// Connect function to application startup event
 	application.Connect("startup", func() {
+		log.Debug("Application starting up...")
+
 		var err error
 		stat = initUIStatus()
 		// TODO: NewClient can take a while, perhaps some sort of popup indicating a program is being executed would be helpful
@@ -131,10 +133,10 @@ func Start(uiGladePath string) {
 
 	// Connect function to application shutdown event
 	application.Connect("shutdown", func() {
-		log.Debug("application shutdown")
+		log.Debug("Application shutdown...")
 		// Close connection if not already
 		if stat.client.conn != nil {
-			if err := stat.client.Disconnect(); err != nil {
+			if err = stat.client.Disconnect(); err != nil {
 				log.Debug(err)
 				log.Error("Error while closing connection")
 				return
@@ -147,9 +149,8 @@ func Start(uiGladePath string) {
 }
 
 func (ui *UIStatus) handleSwitchPage() {
-	log.Debug("handleSwitchPage called")
+	//log.Debug("handleSwitchPage called")
 	ui.isFileTab = !ui.isFileTab
-	log.Debug(ui.isFileTab)
 }
 
 // handleAddButtonClick handles event when "+" button is clicked.
@@ -157,7 +158,8 @@ func (ui *UIStatus) handleSwitchPage() {
 // If "Files" tab is activated, this will show a file chooser
 // If "Contacts" tab is activated, this will prompt for receiver's Add Code
 func (ui *UIStatus) handleAddButtonClick() {
-	log.Debug("handleAddButtonClick called")
+	//log.Debug("handleAddButtonClick called")
+
 	// Behavior depends on current tab
 	if ui.isFileTab {
 		// Add files
@@ -210,7 +212,8 @@ func (ui *UIStatus) handleAddButtonClick() {
 // If expander is opened, register device and get Add Code then display it.
 // If expander is closed, remove device from the Add Code list from the server.
 func (ui *UIStatus) handleActivateExpander(expander *gtk.Expander) {
-	log.Debug("handleActivateExpander called")
+	//log.Debug("handleActivateExpander called")
+
 	// If the current user is offline, do nothing
 	if !ui.onlineStatus {
 		expander.SetExpanded(true)
@@ -234,8 +237,9 @@ func (ui *UIStatus) handleActivateExpander(expander *gtk.Expander) {
 
 	if expander.GetExpanded() {
 		// If expander was expanded, remove current device from the Add Code list
-		log.Debug("Expander no longer revealed")
+		//log.Debug("Expander no longer revealed")
 		go func() {
+			log.Debugf("Removing Add Code: %s", ui.client.addCode)
 			if err = ui.client.DoRemoveAddCode(); err != nil {
 				log.Debug(err)
 				log.Error("Error while removing Add Code from the server")
@@ -263,7 +267,7 @@ func (ui *UIStatus) handleActivateExpander(expander *gtk.Expander) {
 		}()
 	} else {
 		// If expander was not expanded, add current device to the Add Code list
-		log.Debug("Expander revealed")
+		//log.Debug("Expander revealed")
 		go func() {
 			if err = ui.client.DoGetAddCode(); err != nil {
 				log.Debug(err)
@@ -305,7 +309,7 @@ func (ui *UIStatus) handleActivateExpander(expander *gtk.Expander) {
 // If switched to Online, expander is no longer grayed out.
 // If switched to Offline, expander is grayed out.
 func (ui *UIStatus) handleStatusClick(_ *gtk.EventBox, event *gdk.Event) {
-	log.Debug("Status label clicked")
+	//log.Debug("Status label clicked")
 	eventButton := gdk.EventButtonNewFromEvent(event)
 	// If user right-clicks the status label
 	if eventButton.Button() == gdk.BUTTON_PRIMARY {
@@ -338,7 +342,7 @@ func (ui *UIStatus) handleStatusClick(_ *gtk.EventBox, event *gdk.Event) {
 		if ui.onlineStatus {
 			label.SetMarkup("<span foreground=\"orange\">Disconnecting...</span>")
 			go func() {
-				if err := ui.client.Disconnect(); err != nil {
+				if err = ui.client.Disconnect(); err != nil {
 					log.Debug(err)
 					log.Error("Error while connecting to the server")
 					_ = glib.IdleAdd(markAsError)
@@ -347,6 +351,21 @@ func (ui *UIStatus) handleStatusClick(_ *gtk.EventBox, event *gdk.Event) {
 				_ = glib.IdleAdd(func() {
 					label.SetMarkup("<span foreground=\"red\">Offline</span>")
 					ui.onlineStatus = false
+
+					if addCodeExpander.GetExpanded() {
+						// Get grid containing labels for Add Code digits
+						addCodeGrid, err := ui.getGridWithId("addCodeGrid")
+						if err != nil {
+							return
+						}
+						children := addCodeGrid.GetChildren()
+						children.Foreach(func(item interface{}) {
+							label, _ := gtk.WidgetToLabel(item.(*gtk.Widget))
+							label.SetLabel("<span size=\"xx-large\" weight=\"bold\">-</span>")
+						})
+						addCodeExpander.SetExpanded(false)
+					}
+
 					addCodeExpanderLabel.SetLabel("Switch online to get Add Code")
 					addCodeExpander.SetSensitive(false)
 					listBoxRow.SetSensitive(true)
@@ -356,7 +375,7 @@ func (ui *UIStatus) handleStatusClick(_ *gtk.EventBox, event *gdk.Event) {
 		} else {
 			label.SetMarkup("<span foreground=\"orange\">Connecting...</span>")
 			go func() {
-				if err := ui.client.Connect(); err != nil {
+				if err = ui.client.Connect(); err != nil {
 					log.Debug(err)
 					log.Error("Error while connecting to the server")
 					_ = glib.IdleAdd(markAsError)
