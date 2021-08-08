@@ -236,7 +236,7 @@ func (ui *UIStatus) handleActivateExpander(expander *gtk.Expander) {
 		// If expander was expanded, remove current device from the Add Code list
 		log.Debug("Expander no longer revealed")
 		go func() {
-			if isComplete, _ := ui.client.DoRemoveAddCode(); !isComplete {
+			if err = ui.client.DoRemoveAddCode(); err != nil {
 				log.Debug(err)
 				log.Error("Error while removing Add Code from the server")
 				_ = glib.IdleAdd(func() {
@@ -265,7 +265,7 @@ func (ui *UIStatus) handleActivateExpander(expander *gtk.Expander) {
 		// If expander was not expanded, add current device to the Add Code list
 		log.Debug("Expander revealed")
 		go func() {
-			if isComplete, _ := ui.client.DoGetAddCode(); !isComplete {
+			if err = ui.client.DoGetAddCode(); err != nil {
 				log.Debug(err)
 				log.Error("Error while getting Add Code from the server")
 				_ = glib.IdleAdd(func() {

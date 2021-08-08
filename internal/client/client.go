@@ -55,13 +55,13 @@ func NewClient() (client *Client, err error) {
 	return client, nil
 }
 
-func (client *Client) HandleRequestPubKey() {
+func (client *Client) HandleGetPubKey() {
 
 }
 
 func (client *Client) doInit() (err error) {
 	pubKeyHash := cryptography.PemToSha256(client.pubKeyBlock)
-	if _, err = util.WriteBytes(client.conn, pubKeyHash, nil); err != nil {
+	if _, err = util.WriteBytes(client.conn, pubKeyHash); err != nil {
 		log.Debug(err)
 		log.Error("Error while init command")
 		return err
@@ -71,7 +71,7 @@ func (client *Client) doInit() (err error) {
 }
 
 func (client *Client) doQuit() (err error) {
-	if _, err = util.WriteString(client.conn, common.Quit.String(), nil); err != nil {
+	if _, err = util.WriteString(client.conn, common.Quit.String()); err != nil {
 		log.Debug(err)
 		log.Error("Error while quit command")
 		return err
@@ -81,11 +81,12 @@ func (client *Client) doQuit() (err error) {
 }
 
 func (client *Client) DoGetAddCode() (err error) {
-	if _, err = util.WriteString(client.conn, common.GetAddCode.String(), nil); err != nil {
+	if _, err = util.WriteString(client.conn, common.GetAddCode.String()); err != nil {
 		return err
 	}
 	addCode, err := util.ReadBytes(client.conn)
 	if err != nil {
+		log.Debug(err)
 		return err
 	}
 	client.addCode = string(addCode)
@@ -94,10 +95,10 @@ func (client *Client) DoGetAddCode() (err error) {
 }
 
 func (client *Client) DoRemoveAddCode() (err error) {
-	if _, err = util.WriteString(client.conn, common.RemoveAddCode.String(), nil); err != nil {
+	if _, err = util.WriteString(client.conn, common.RemoveAddCode.String()); err != nil {
 		return err
 	}
-	if _, err = util.WriteString(client.conn, client.addCode, nil); err != nil {
+	if _, err = util.WriteString(client.conn, client.addCode); err != nil {
 		return err
 	}
 
@@ -105,10 +106,10 @@ func (client *Client) DoRemoveAddCode() (err error) {
 }
 
 func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
-	if _, err = util.WriteString(client.conn, common.RequestRelay.String(), nil); err != nil {
+	if _, err = util.WriteString(client.conn, common.RequestRelay.String()); err != nil {
 		return err
 	}
-	if _, err = util.WriteString(client.conn, rxPubKeyHash, nil); err != nil {
+	if _, err = util.WriteString(client.conn, rxPubKeyHash); err != nil {
 		return err
 	}
 	// TODO: Finish implementing
@@ -116,15 +117,16 @@ func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
 	return client.getResult(client.conn)
 }
 
-func (client *Client) DoGetPubKey(rxAddCodeStr string, fileName string) (err error) {
-	if _, err = util.WriteString(client.conn, common.GetPubKey.String(), nil); err != nil {
+func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err error) {
+	if _, err = util.WriteString(client.conn, common.GetPubKey.String()); err != nil {
 		return err
 	}
-	if _, err = util.WriteString(client.conn, rxAddCodeStr, nil); err != nil {
+	if _, err = util.WriteString(client.conn, rxAddCodeStr); err != nil {
 		return err
 	}
 	rxPubKeyBytes, err := util.ReadBytes(client.conn)
 	if err != nil {
+		log.Debug(err)
 		return err
 	}
 	if err = cryptography.BytesToPemFile(rxPubKeyBytes, fileName); err != nil {
@@ -136,6 +138,7 @@ func (client *Client) DoGetPubKey(rxAddCodeStr string, fileName string) (err err
 
 func (client *Client) getResult(conn net.Conn) (err error) {
 	_, err = util.ReadBytes(conn)
+
 	return err
 }
 
@@ -152,13 +155,7 @@ func (client *Client) Connect() (err error) {
 	}
 	client.conn = dial
 
-	if err = client.doInit(); err != nil {
-		log.Debug(err)
-		log.Error("Task is not complete")
-		return common.TaskNotCompleteError
-	}
-
-	return nil
+	return client.doInit()
 }
 
 func (client *Client) Disconnect() (err error) {
