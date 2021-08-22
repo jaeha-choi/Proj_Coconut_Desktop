@@ -624,6 +624,7 @@ func TestReadStringSizeError(t *testing.T) {
 }
 
 func TestReadStringSizeMax(t *testing.T) {
+	//t.Skip()
 	// Open input file for testing
 	file, err := os.Open("../testdata/test_4096.txt")
 	if err != nil {
@@ -667,7 +668,7 @@ func TestReadStringSizeMax(t *testing.T) {
 		return
 	}
 
-	if string(input) != result {
+	if string(input)[:4096] != result {
 		log.Debug("Input: ", string(input))
 		log.Debug("----------------")
 		log.Debug("Result: ", result)
