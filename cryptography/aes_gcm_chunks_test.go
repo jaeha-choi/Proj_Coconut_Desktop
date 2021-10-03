@@ -6,7 +6,6 @@ import (
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,7 +32,7 @@ func TestEncryptDecrypt(t *testing.T) {
 		return
 	}
 
-	tmpFile, err := ioutil.TempFile(".", "test")
+	tmpFile, err := os.Create("testTmp")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error opening temp file")
@@ -111,7 +110,7 @@ func TestEncryptDecrypt2(t *testing.T) {
 	}()
 	testFileN := "../testdata/cat.jpg"
 
-	tmpFile, err := ioutil.TempFile(".", "test")
+	tmpFile, err := os.Create("testTmp")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error opening temp file")
