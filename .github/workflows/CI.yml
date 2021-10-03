@@ -37,8 +37,8 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Build
-        run: go build -v ./...
+      #      - name: Build
+      #        run: go build -v ./...
 
-      - name: Test
-        run: go test -v ./...
+      - name: Client Test
+        run: go test -v ./internal/client/client_test.go

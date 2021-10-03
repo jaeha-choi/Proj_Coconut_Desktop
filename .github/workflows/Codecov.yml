@@ -33,7 +33,7 @@ jobs:
         run: go mod download
 
       - name: Generate coverage.txt
-        run: go test -v ./... -race -coverprofile=coverage.txt -covermode=atomic
+        run: go test -v ./internal/client/client_test.go -race -coverprofile=coverage.txt -covermode=atomic
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v1.5.2
