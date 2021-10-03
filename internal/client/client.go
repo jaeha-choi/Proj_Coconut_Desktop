@@ -45,9 +45,10 @@ func NewClient() (client *Client, err error) {
 	}
 
 	client = &Client{
+		//ServerIp:    "coconut-demo.jaeha.dev",
 		ServerIp:    "127.0.0.1",
 		ServerPort:  9129,
-		tlsConfig:   &tls.Config{InsecureSkipVerify: true},
+		tlsConfig:   &tls.Config{InsecureSkipVerify: true}, // TODO: Update after using trusted cert
 		privKey:     privK,
 		pubKeyBlock: pubBlock,
 		conn:        nil,
