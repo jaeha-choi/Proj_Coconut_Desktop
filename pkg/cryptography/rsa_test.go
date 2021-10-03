@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"os"
 	"testing"
 )
@@ -77,7 +78,7 @@ func TestGenAESKey(t *testing.T) {
 }
 
 func TestBytesToBase64(t *testing.T) {
-	encoded := BytesToBase64(t, []byte("test string"))
+	encoded := util.BytesToBase64([]byte("test string"))
 	if !bytes.Equal(encoded, []byte("dGVzdCBzdHJpbmc=")) {
 		t.Error("Error in BytesToBase64")
 		return
@@ -117,6 +118,74 @@ func TestKeyEncryptSignAESKey(t *testing.T) {
 		t.Error("Error in keyExchange")
 		return
 	}
+}
+
+func TestKeyEncryptDecryptAESKey(t *testing.T) {
+
+	// Client 1
+	// Open Key as PEM
+	_, privPem1, err := OpenKeys("../testdata/keypair1/")
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in OpenKeys")
+		return
+	}
+
+	// Convert PEM to key structs
+	privKey1, err := PemToKeys(privPem1)
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in PemToKeys")
+		return
+	}
+
+	// Client 3
+	// Open Key as PEM
+	_, privPem3, err := OpenKeys("../testdata/keypair3/")
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in OpenKeys")
+		return
+	}
+
+	// Convert PEM to key structs
+	privKey3, err := PemToKeys(privPem3)
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in PemToKeys")
+		return
+	}
+
+	// Generate AES key
+	rawKey, err := genSymKey()
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in genAESKey")
+		return
+	}
+
+	data, sig, err := EncryptSignMsg(rawKey, &privKey3.PublicKey, privKey1)
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in keyExchange")
+		return
+	}
+
+	key, err := DecryptVerifyMsg(data, sig, &privKey1.PublicKey, privKey3)
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in keyExchange")
+		return
+	}
+	log.Debug(fmt.Sprintf("Raw Key(Hex): \t\t\t%x", rawKey))
+	log.Debug(fmt.Sprintf("Decrypted Key(Hex): \t%x", key))
+	log.Debug(fmt.Sprintf("Raw Key(Sha256,Hex): \t\t%x", sha256.Sum256(rawKey)))
+	log.Debug(fmt.Sprintf("Decrypted Key(Sha256,Hex): \t%x", sha256.Sum256(key)))
+
+	if bytes.Compare(rawKey, key) != 0 {
+		t.Error("Key mismatch")
+	}
+
 }
 
 // BytesToBase64 encodes raw bytes to base64
