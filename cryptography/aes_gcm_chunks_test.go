@@ -13,6 +13,12 @@ import (
 )
 
 func TestEncryptDecrypt(t *testing.T) {
+	defer func() {
+		if err := os.RemoveAll(util.DownloadPath); err != nil {
+			log.Debug(err)
+			log.Error("Existing directory not deleted, perhaps it does not exist?")
+		}
+	}()
 	testFileN := "../testdata/checksum.txt"
 	_, privPem, err := OpenKeys("../testdata/keypair1/")
 	if err != nil {
@@ -81,12 +87,6 @@ func TestEncryptDecrypt(t *testing.T) {
 		t.Error("Error in DecryptSetup")
 		return
 	}
-	err = streamDecrypt.Decrypt(tmpFile, &privKey.PublicKey, privKey)
-	if err != nil {
-		log.Debug(err)
-		t.Error("Error in Decrypt")
-		return
-	}
 	defer func() {
 		if err := streamDecrypt.Close(); err != nil {
 			log.Debug(err)
@@ -94,15 +94,21 @@ func TestEncryptDecrypt(t *testing.T) {
 			return
 		}
 	}()
+	err = streamDecrypt.Decrypt(tmpFile, &privKey.PublicKey, privKey)
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in Decrypt")
+		return
+	}
+}
+
+func TestEncryptDecrypt2(t *testing.T) {
 	defer func() {
 		if err := os.RemoveAll(util.DownloadPath); err != nil {
 			log.Debug(err)
 			log.Error("Existing directory not deleted, perhaps it does not exist?")
 		}
 	}()
-}
-
-func TestEncryptDecrypt2(t *testing.T) {
 	testFileN := "../testdata/cat.jpg"
 
 	tmpFile, err := ioutil.TempFile(".", "test")
@@ -159,12 +165,6 @@ func TestEncryptDecrypt2(t *testing.T) {
 		t.Error("Error in EncryptSetup")
 		return
 	}
-	err = streamEncrypt.Encrypt(tmpFile, &privKey2.PublicKey, privKey1)
-	if err != nil {
-		log.Debug(err)
-		t.Error("Error in Encrypt")
-		return
-	}
 	defer func() {
 		if err := streamEncrypt.Close(); err != nil {
 			log.Debug(err)
@@ -172,6 +172,12 @@ func TestEncryptDecrypt2(t *testing.T) {
 			return
 		}
 	}()
+	err = streamEncrypt.Encrypt(tmpFile, &privKey2.PublicKey, privKey1)
+	if err != nil {
+		log.Debug(err)
+		t.Error("Error in Encrypt")
+		return
+	}
 
 	// Reset offset
 	if _, err := tmpFile.Seek(0, 0); err != nil {
@@ -230,12 +236,6 @@ func TestEncryptDecrypt2(t *testing.T) {
 	if !ChecksumMatch(t, srcFile, dstFile) {
 		t.Error("Checksum does not match")
 	}
-	defer func() {
-		if err := os.RemoveAll(util.DownloadPath); err != nil {
-			log.Debug(err)
-			log.Error("Existing directory not deleted, perhaps it does not exist?")
-		}
-	}()
 }
 
 func ChecksumMatch(t *testing.T, expected io.Reader, result io.Reader) bool {

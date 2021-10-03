@@ -20,7 +20,7 @@ func init() {
 }
 
 func TestReadBinary(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	// Create reader for destination file
 	dstFileN := "cat_result.jpg"
 	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
@@ -100,7 +100,7 @@ func TestReadBinary(t *testing.T) {
 }
 
 func TestReadBinaryEmptyFileNSizeError(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	// Use super long text for file name
 	dstFileNFile := "../testdata/test_8192.txt"
 	fileNFile, err := os.Open(dstFileNFile)
@@ -128,7 +128,7 @@ func TestReadBinaryEmptyFileNSizeError(t *testing.T) {
 }
 
 func TestReadBinaryEmptyFileNError(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	// Create reader for destination file
 	dstFileN := ""
 	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
@@ -169,7 +169,7 @@ func TestReadBinaryEmptyFileNError(t *testing.T) {
 }
 
 func TestReadBinaryIncorrectFileSize(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	// Create reader for destination file
 	dstFileN := "cat_result.jpg"
 	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
@@ -203,7 +203,7 @@ func TestReadBinaryIncorrectFileSize(t *testing.T) {
 }
 
 func TestReadBinaryShortReader(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	// Create reader for destination file
 	dstFileN := "cat_result.jpg"
 	destFileNSizeReader := bytes.NewReader(sizeToBytesHelper(t, uint32(len(dstFileN))))
@@ -319,7 +319,7 @@ func TestWriteString(t *testing.T) {
 }
 
 func TestReadNBinary(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	testFileN := "../testdata/cat.jpg"
 	resultFileN := "cat_result.jpg"
 
@@ -379,7 +379,7 @@ func TestReadNBinary(t *testing.T) {
 }
 
 func TestReadNBinaryTiny(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 
 	testFileN := "../testdata/pine_cone.jpg"
 	resultFileN := "pine_cone_result.jpg"
@@ -440,7 +440,7 @@ func TestReadNBinaryTiny(t *testing.T) {
 }
 
 func TestReadWriteBinary(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	srcFileN := "../testdata/cat.jpg"
 	var buffer bytes.Buffer
 
@@ -482,7 +482,7 @@ func TestReadWriteBinary(t *testing.T) {
 }
 
 func TestReadNBinaryCreateDirError(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	testFileN := "../testdata/cat.jpg"
 	resultFileN := "cat_result.jpg"
 
@@ -529,7 +529,7 @@ func TestReadNBinaryCreateDirError(t *testing.T) {
 }
 
 func TestReadNBinaryTinyWrongSize(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	testFileN := "../testdata/pine_cone.jpg"
 	resultFileN := "pine_cone_result.jpg"
 
@@ -561,7 +561,7 @@ func TestReadNBinaryTinyWrongSize(t *testing.T) {
 }
 
 func TestReadNBinaryTinyWrongSize2(t *testing.T) {
-	t.Cleanup(CleanupHelper)
+	defer CleanupHelper()
 	testFileN := "../testdata/cat.jpg"
 	resultFileN := "cat_result.jpg"
 
