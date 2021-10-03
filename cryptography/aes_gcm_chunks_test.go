@@ -13,12 +13,6 @@ import (
 )
 
 func TestEncryptDecrypt(t *testing.T) {
-	t.Cleanup(func() {
-		if err := os.RemoveAll(util.DownloadPath); err != nil {
-			log.Debug(err)
-			log.Error("Existing directory not deleted, perhaps it does not exist?")
-		}
-	})
 	testFileN := "../testdata/checksum.txt"
 	_, privPem, err := OpenKeys("../testdata/keypair1/")
 	if err != nil {
@@ -100,15 +94,15 @@ func TestEncryptDecrypt(t *testing.T) {
 			return
 		}
 	}()
-}
-
-func TestEncryptDecrypt2(t *testing.T) {
-	t.Cleanup(func() {
+	defer func() {
 		if err := os.RemoveAll(util.DownloadPath); err != nil {
 			log.Debug(err)
 			log.Error("Existing directory not deleted, perhaps it does not exist?")
 		}
-	})
+	}()
+}
+
+func TestEncryptDecrypt2(t *testing.T) {
 	testFileN := "../testdata/cat.jpg"
 
 	tmpFile, err := ioutil.TempFile(".", "test")
@@ -236,6 +230,12 @@ func TestEncryptDecrypt2(t *testing.T) {
 	if !ChecksumMatch(t, srcFile, dstFile) {
 		t.Error("Checksum does not match")
 	}
+	defer func() {
+		if err := os.RemoveAll(util.DownloadPath); err != nil {
+			log.Debug(err)
+			log.Error("Existing directory not deleted, perhaps it does not exist?")
+		}
+	}()
 }
 
 func ChecksumMatch(t *testing.T, expected io.Reader, result io.Reader) bool {
