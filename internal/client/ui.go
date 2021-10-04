@@ -5,6 +5,7 @@ import (
 	"github.com/gotk3/gotk3/gdk"
 	"github.com/gotk3/gotk3/glib"
 	"github.com/gotk3/gotk3/gtk"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"os"
 	"path/filepath"
@@ -67,7 +68,7 @@ func initUIStatus() (stat *UIStatus) {
 }
 
 // Start initializes all configurations and starts main UI
-func Start(uiGladePath string) {
+func Start(uiGladePath string, client *Client) {
 	var stat *UIStatus
 
 	// Create a new application.
@@ -82,20 +83,25 @@ func Start(uiGladePath string) {
 	application.Connect("startup", func() {
 		log.Debug("Application starting up...")
 
-		var err error
 		stat = initUIStatus()
-		// TODO: NewClient can take a while, perhaps some sort of popup indicating a program is being executed would be helpful
-		stat.client, err = NewClient()
-		if err != nil {
-			log.Debug(err)
-			log.Error("Error while initializing client configuration")
-			return
-		}
+		stat.client = client
 	})
 
 	// Connect function to application activate event
 	application.Connect("activate", func() {
 		var err error
+		// Open RSA Keys
+		pubBlock, privBlock, err := cryptography.OpenKeys(client.KeyPath)
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
+		stat.client.pubKeyBlock = pubBlock
+		stat.client.privKey, err = cryptography.PemToKeys(privBlock)
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
 
 		// Get the GtkBuilder ui definition in the glade file.
 		stat.builder, err = gtk.BuilderNewFromFile(uiGladePath)
@@ -145,7 +151,7 @@ func Start(uiGladePath string) {
 	})
 
 	// Launch the application
-	os.Exit(application.Run(os.Args))
+	os.Exit(application.Run(nil))
 }
 
 func (ui *UIStatus) handleSwitchPage() {

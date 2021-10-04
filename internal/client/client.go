@@ -8,8 +8,9 @@ import (
 	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
+	"gopkg.in/yaml.v3"
+	"io/ioutil"
 	"net"
-	"os"
 	"strconv"
 )
 
@@ -18,8 +19,9 @@ const (
 )
 
 type Client struct {
-	ServerIp    string `yaml:"server_ip"`
+	ServerHost  string `yaml:"server_host"`
 	ServerPort  uint16 `yaml:"server_port"`
+	KeyPath     string `yaml:"key_path"`
 	tlsConfig   *tls.Config
 	privKey     *rsa.PrivateKey
 	pubKeyBlock *pem.Block
@@ -27,37 +29,51 @@ type Client struct {
 	addCode     string
 }
 
-func init() {
-	log.Init(os.Stdout, log.DEBUG)
-}
-
-func NewClient() (client *Client, err error) {
-	// Open RSA Keys
-	pubBlock, privBlock, err := cryptography.OpenKeys(keyPath)
-	if err != nil {
-		log.Debug(err)
-		return nil, err
-	}
-	privK, err := cryptography.PemToKeys(privBlock)
-	if err != nil {
-		log.Debug(err)
-		return nil, err
-	}
-
+// InitConfig initializes Client struct.
+func InitConfig() (client *Client, err error) {
 	client = &Client{
-		//ServerIp:    "coconut-demo.jaeha.dev",
-		ServerIp:    "127.0.0.1",
+		//ServerHost:    "127.0.0.1",
+		ServerHost:  "coconut-demo.jaeha.dev",
 		ServerPort:  9129,
 		tlsConfig:   &tls.Config{InsecureSkipVerify: true}, // TODO: Update after using trusted cert
-		privKey:     privK,
-		pubKeyBlock: pubBlock,
+		privKey:     nil,
+		pubKeyBlock: nil,
 		conn:        nil,
+		addCode:     "",
+		KeyPath:     keyPath,
 	}
 	return client, nil
 }
 
-func (client *Client) HandleGetPubKey() {
+// ReadConfig reads a config from a yaml file
+func ReadConfig(fileName string) (client *Client, err error) {
+	client, err = InitConfig()
+	if err != nil {
+		log.Debug(err)
+		return nil, err
+	}
+	file, err := ioutil.ReadFile(fileName)
+	if err != nil {
+		log.Debug(err)
+		return nil, err
+	}
+	err = yaml.Unmarshal(file, &client)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while parsing config.yml")
+		return nil, err
+	}
+	return client, nil
+}
 
+func (client *Client) HandleGetPubKey(conn net.Conn) (err error) {
+	if _, err = util.WriteBytes(conn, client.pubKeyBlock.Bytes); err != nil {
+		log.Debug(err)
+		log.Error("Error while sending public key")
+		return err
+	}
+	// TODO: Write error code to conn?
+	return nil
 }
 
 func (client *Client) doInit() (err error) {
@@ -148,14 +164,14 @@ func (client *Client) Connect() (err error) {
 		return common.ExistingConnError
 	}
 	log.Debug("Connecting...")
-	dial, err := tls.Dial("tcp", client.ServerIp+":"+strconv.Itoa(int(client.ServerPort)), client.tlsConfig)
+	client.conn, err = tls.Dial("tcp", client.ServerHost+":"+strconv.Itoa(int(client.ServerPort)), client.tlsConfig)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while connecting to the server")
 		return err
 	}
-	client.conn = dial
 
+	log.Info(client.conn.LocalAddr().String())
 	return client.doInit()
 }
 
