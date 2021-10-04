@@ -12,7 +12,7 @@ func init() {
 
 //TODO: Test with demo server
 func TestConnect(t *testing.T) {
-	_, err := NewClient()
+	_, err := InitConfig()
 	if err != nil {
 		t.Error(err)
 	}
