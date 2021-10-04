@@ -32,8 +32,7 @@ type Client struct {
 // InitConfig initializes Client struct.
 func InitConfig() (client *Client, err error) {
 	client = &Client{
-		//ServerHost:    "127.0.0.1",
-		ServerHost:  "coconut-demo.jaeha.dev",
+		ServerHost:  "127.0.0.1",
 		ServerPort:  9129,
 		tlsConfig:   &tls.Config{InsecureSkipVerify: true}, // TODO: Update after using trusted cert
 		privKey:     nil,

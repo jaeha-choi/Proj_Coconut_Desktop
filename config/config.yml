@@ -1,3 +1,3 @@
-server_host: coconut-demo.jaeha.dev
+server_host: 127.0.0.1
 server_port: 9129
 key_path: ./
