@@ -13,6 +13,9 @@ const (
 	RemoveAddCode Command = "RADC"
 	GetPubKey     Command = "GPUB"
 	RequestPubKey Command = "RPUB"
+	GetPTPip      Command = "GPTP"
+	RequestPTPip  Command = "RPTP"
+	GetPTPInit    Command = "PTPI"
 )
 
 func (c Command) String() string {
