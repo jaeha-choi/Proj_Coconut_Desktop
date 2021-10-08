@@ -3,7 +3,7 @@
 [![CI](https://github.com/jaeha-choi/Proj_Coconut_Desktop/actions/workflows/CI.yml/badge.svg)](https://github.com/jaeha-choi/Proj_Coconut_Desktop/actions/workflows/CI.yml)
 [![codecov](https://codecov.io/gh/jaeha-choi/Proj_Coconut_Desktop/branch/master/graph/badge.svg?token=Z0HSKGYIDO)](https://codecov.io/gh/jaeha-choi/Proj_Coconut_Desktop)
 
-#### An open-source, cross-platform program for file sharing.
+#### An open-source, cross-platform program for sharing files.
 
 ![Main page](./testdata/Img1.png)
 
