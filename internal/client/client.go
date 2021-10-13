@@ -15,7 +15,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
-	"sort"
+	"path/filepath"
 	"strconv"
 )
 
@@ -27,6 +27,7 @@ type Client struct {
 	ServerHost  string `yaml:"server_host"`
 	ServerPort  uint16 `yaml:"server_port"`
 	KeyPath     string `yaml:"key_path"`
+	DataPath    string `yaml:"data_path"`
 	tlsConfig   *tls.Config
 	privKey     *rsa.PrivateKey
 	pubKeyBlock *pem.Block
@@ -225,19 +226,22 @@ func (client *Client) DoHolePunchInit() (err error) {
 	return client.getResult(client.conn)
 }
 
+// TODO finish implementation
 func (client *Client) DoSendPubKey() (err error) {
 
 	return client.getResult(client.conn)
 }
 
 // ReadContactsFile read the contents of contacts.gob into client.contactList
-func (client *Client) ReadContactsFile() {
+// returns error if applicable
+func (client *Client) ReadContactsFile() (err error) {
 	var contactsList []Contact
 
-	file, err := os.OpenFile("./data/contacts.gob", os.O_RDONLY|os.O_CREATE, 0666)
+	file, err := os.OpenFile(filepath.Join(client.DataPath, "contacts.gob"), os.O_RDONLY|os.O_CREATE, 0666)
 
 	if err != nil {
 		log.Error("Error opening file: ", err)
+		return err
 	}
 
 	defer func() {
@@ -251,21 +255,23 @@ func (client *Client) ReadContactsFile() {
 	err = dataDecode.Decode(&contactsList)
 	if err == io.EOF {
 		client.contactList = nil
-		return
+		return nil
 	}
 	if err != nil {
 		log.Error("Error decoding file: ", err)
+		return err
 	}
 	client.contactList = contactsList
-	return
+	return err
 }
 
 // WriteContactsFile write contents of contacts array into contacts.gob file
 // returns error if error generated
 func (client *Client) WriteContactsFile() (err error) {
-	file, err := os.OpenFile("./data/contacts.gob", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	file, err := os.OpenFile(filepath.Join(client.DataPath, "contacts.gob"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		log.Error("Error opening file: ", err)
+		return err
 	}
 
 	defer func() {
@@ -276,10 +282,10 @@ func (client *Client) WriteContactsFile() (err error) {
 	}()
 
 	dataEncoder := gob.NewEncoder(file)
-	err = dataEncoder.Encode(client.contactList)
-	return err
+	return dataEncoder.Encode(client.contactList)
 }
 
+// TODO change client.contactList from slice to map
 // addContact initializes new contact struct
 // returns true if contact added or already in list, false otherwise
 func (client *Client) addContact(fname string, lname string, pkhash []byte, pubkey *pem.Block) (inserted bool) {
@@ -297,9 +303,6 @@ func (client *Client) addContact(fname string, lname string, pkhash []byte, pubk
 		pubkey,
 	}
 	client.contactList = append(client.contactList, contact)
-	sort.Slice(client.contactList, func(i, j int) bool {
-		return false
-	})
 	return true
 }
 

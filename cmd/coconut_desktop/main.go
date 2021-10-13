@@ -22,6 +22,7 @@ func main() {
 	serverHostFlag := flag.String("host", "", "Server address")
 	serverPortFlag := flag.Int("port", 0, "Server port")
 	keyPathFlag := flag.String("cert-path", "", "Key pair path")
+	dataPathFlag := flag.String("data-path", "", "Data path")
 
 	flag.Parse()
 
@@ -66,6 +67,9 @@ func main() {
 	}
 	if *keyPathFlag != "" {
 		cli.KeyPath = *keyPathFlag
+	}
+	if *dataPathFlag != "" {
+		cli.DataPath = *dataPathFlag
 	}
 	if 0 < *serverPortFlag && *serverPortFlag < 65536 {
 		cli.ServerPort = uint16(*serverPortFlag)

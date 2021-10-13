@@ -51,8 +51,17 @@ func TestGOBReadWrite(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	client.DataPath = "./data/"
+	err = os.Remove("./data/contacts.gob")
+	if err != nil {
+		return
+	}
+
 	log.Debug("config")
-	client.ReadContactsFile()
+	err = client.ReadContactsFile()
+	if err != nil {
+		t.Error(err)
+	}
 	if client.contactList != nil {
 		t.Error("Error initializing contact list")
 	}
@@ -81,7 +90,7 @@ func TestGOBReadWrite(t *testing.T) {
 	}
 	log.Debug("file write")
 	client.contactList = nil
-	client.ReadContactsFile()
+	err = client.ReadContactsFile()
 	if client.contactList == nil {
 		t.Error("Error opening contacts file")
 	}
