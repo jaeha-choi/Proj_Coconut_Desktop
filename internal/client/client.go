@@ -1,16 +1,21 @@
 package client
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"crypto/tls"
+	"encoding/gob"
 	"encoding/pem"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/common"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"gopkg.in/yaml.v3"
+	"io"
 	"io/ioutil"
 	"net"
+	"os"
+	"sort"
 	"strconv"
 )
 
@@ -27,6 +32,14 @@ type Client struct {
 	pubKeyBlock *pem.Block
 	conn        net.Conn
 	addCode     string
+	contactList []Contact
+}
+
+type Contact struct {
+	FirstName  string
+	LastName   string
+	PubKeyHash []byte
+	PubKey     *pem.Block
 }
 
 // InitConfig initializes Client struct.
@@ -191,4 +204,128 @@ func (client *Client) Disconnect() (err error) {
 	}
 	client.conn = nil
 	return nil
+}
+
+func (client *Client) DoHolePunchInit() (err error) {
+	if _, err = util.WriteString(client.conn, common.RequestPTPip.String()); err != nil {
+		return err
+	}
+	ptp, err := util.ReadString(client.conn) // should return command "GKEY" asking for pubkey of client 2
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while connecting to the server")
+		return err
+	}
+	if ptp != "GKEY" {
+		log.Debug("Wrong command received, expected 'GKEY'")
+		log.Error("Wrong command received from server (holepunch)")
+		return err
+	}
+	// should select pubkey to send here
+	return client.getResult(client.conn)
+}
+
+func (client *Client) DoSendPubKey() (err error) {
+
+	return client.getResult(client.conn)
+}
+
+// ReadContactsFile read the contents of contacts.gob into client.contactList
+func (client *Client) ReadContactsFile() {
+	var contactsList []Contact
+
+	file, err := os.OpenFile("./data/contacts.gob", os.O_RDONLY|os.O_CREATE, 0666)
+
+	if err != nil {
+		log.Error("Error opening file: ", err)
+	}
+
+	defer func() {
+		err = file.Close()
+		if err != nil {
+			log.Error("Error closing file: ", err)
+		}
+	}()
+
+	dataDecode := gob.NewDecoder(file)
+	err = dataDecode.Decode(&contactsList)
+	if err == io.EOF {
+		client.contactList = nil
+		return
+	}
+	if err != nil {
+		log.Error("Error decoding file: ", err)
+	}
+	client.contactList = contactsList
+	return
+}
+
+// WriteContactsFile write contents of contacts array into contacts.gob file
+// returns error if error generated
+func (client *Client) WriteContactsFile() (err error) {
+	file, err := os.OpenFile("./data/contacts.gob", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	if err != nil {
+		log.Error("Error opening file: ", err)
+	}
+
+	defer func() {
+		err = file.Close()
+		if err != nil {
+			log.Error("Error closing file: ", err)
+		}
+	}()
+
+	dataEncoder := gob.NewEncoder(file)
+	err = dataEncoder.Encode(client.contactList)
+	return err
+}
+
+// addContact initializes new contact struct
+// returns true if contact added or already in list, false otherwise
+func (client *Client) addContact(fname string, lname string, pkhash []byte, pubkey *pem.Block) (inserted bool) {
+	// check if contact already in list
+	for i := range client.contactList {
+		if bytes.Compare(client.contactList[i].PubKeyHash, pkhash) == 0 {
+			return true
+		}
+	}
+	// create contact if not in list
+	contact := Contact{
+		fname,
+		lname,
+		pkhash,
+		pubkey,
+	}
+	client.contactList = append(client.contactList, contact)
+	sort.Slice(client.contactList, func(i, j int) bool {
+		return false
+	})
+	return true
+}
+
+// findContact returns bool and contact if pubkey hash is found in contacts list
+// returns false and empty contact if not found
+func (client *Client) findContact(pkhash []byte) (b bool, c Contact) {
+	for i := range client.contactList {
+		if bytes.Compare(client.contactList[i].PubKeyHash, pkhash) == 0 {
+			return true, client.contactList[i]
+		}
+	}
+	return false, Contact{}
+}
+
+// removeContact removes contact with specified pubkey hash
+// returns true if found and removed, false if not found
+func (client *Client) removeContact(pkhash []byte) (b bool) {
+	for i := range client.contactList {
+		if bytes.Compare(client.contactList[i].PubKeyHash, pkhash) == 0 {
+			client.contactList = removeContactHelper(client.contactList, i)
+			return true
+		}
+	}
+	return false
+}
+func removeContactHelper(l []Contact, i int) []Contact {
+	l[i] = l[len(l)-1]
+	return l[:len(l)-1]
 }

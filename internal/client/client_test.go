@@ -11,14 +11,121 @@ func init() {
 }
 
 //TODO: Test with demo server
-func TestConnect(t *testing.T) {
-	_, err := InitConfig()
+//func TestConnect(t *testing.T) {
+//	client, err := InitConfig()
+//	if err != nil {
+//		t.Error(err)//	}
+//	log.Debug("init")
+//	pubBlock, privBlock, err := cryptography.OpenKeys(client.KeyPath)
+//	if err != nil {
+//		log.Fatal(err)
+//		os.Exit(1)
+//	}
+//	client.pubKeyBlock = pubBlock
+//	client.privKey, err = cryptography.PemToKeys(privBlock)
+//	if err != nil {
+//		log.Fatal(err)
+//		os.Exit(1)
+//	}
+//	defer func (){
+//		err = client.Disconnect()
+//	}()
+//
+//	err = client.Connect()
+//	if err != nil {
+//		t.Error(err)
+//		return
+//	}
+//	log.Debug("connect")
+//
+//	err = client.DoHolePunchInit()
+//	if err != nil {
+//		t.Error(err)
+//		return
+//	}
+//	log.Debug("holepunch")
+//}
+
+func TestGOBReadWrite(t *testing.T) {
+	client, err := InitConfig()
 	if err != nil {
 		t.Error(err)
 	}
-	//err = client.Connect()
-	//if err != nil {
-	//	t.Error(err)
-	//	return
-	//}
+	log.Debug("config")
+	client.ReadContactsFile()
+	if client.contactList != nil {
+		t.Error("Error initializing contact list")
+	}
+	log.Debug("file read")
+	var bytes1 = []byte("string")
+	var bytes2 = []byte("123456")
+	var bytes3 = []byte("abcdef")
+	var bytes4 = []byte("zyxwvu")
+	var pub = client.pubKeyBlock
+	if !client.addContact("abc", "zyx", bytes1, pub) {
+		t.Error("failed to add contact")
+	}
+	if !client.addContact("bbc", "dsx", bytes2, pub) {
+		t.Error("failed to add contact")
+	}
+	if !client.addContact("cbc", "fds", bytes3, pub) {
+		t.Error("failed to add contact")
+	}
+	if !client.addContact("dbc", "457", bytes4, pub) {
+		t.Error("failed to add contact")
+	}
+	log.Debug("added contacts")
+
+	if err = client.WriteContactsFile(); err != nil {
+		t.Error(err)
+	}
+	log.Debug("file write")
+	client.contactList = nil
+	client.ReadContactsFile()
+	if client.contactList == nil {
+		t.Error("Error opening contacts file")
+	}
+	log.Debug("file read 2")
+	var b bool
+	var c Contact
+	b, c = client.findContact([]byte("123456"))
+	if b {
+		log.Debug(c)
+	}
+	if !b {
+		log.Debug("contact not found")
+	}
+
+	b, c = client.findContact([]byte("123556"))
+	if b {
+		log.Debug(c)
+	}
+	if !b {
+		log.Debug("contact not found")
+	}
+
+	b, c = client.findContact([]byte("abcdef"))
+	if b {
+		log.Debug(c)
+	}
+	if !b {
+		log.Debug("contact not found")
+	}
+
+	if client.removeContact([]byte("123456")) {
+		log.Debug("successfully removed")
+	} else {
+		log.Debug("could not find contact")
+	}
+	if client.removeContact([]byte("123556")) {
+		log.Debug("successfully removed")
+	} else {
+		log.Debug("could not find contact")
+	}
+	if client.removeContact([]byte("abcdef")) {
+		log.Debug("successfully removed")
+	} else {
+		log.Debug("could not find contact")
+	}
+	log.Debug(client.contactList)
 }
