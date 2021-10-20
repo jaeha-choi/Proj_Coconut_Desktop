@@ -26,6 +26,9 @@ func TestConnect(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	if err != nil {
+		return
+	}
 	log.Debug("init")
 	pubBlock, privBlock, err := cryptography.OpenKeys(client.KeyPath)
 	if err != nil {
@@ -47,11 +50,16 @@ func TestConnect(t *testing.T) {
 		t.Error(err)
 		return
 	}
+
 	log.Debug("connect")
 
 	if err != nil {
 		t.Error(err)
 		return
+	}
+	err = client.DoRequestP2P(client.conn, []byte("abcd"))
+	if err != nil {
+		log.Error(err)
 	}
 	log.Debug("holepunch")
 }

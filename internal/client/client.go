@@ -34,7 +34,7 @@ type Client struct {
 	privKey     *rsa.PrivateKey
 	pubKeyBlock *pem.Block
 	conn        net.Conn
-	localAddr   *net.TCPAddr
+	localAddr   net.Addr
 	addCode     string
 	contactList []Contact
 }
@@ -213,32 +213,37 @@ func (client *Client) Disconnect() (err error) {
 	return nil
 }
 
-func (client *Client) DoRequestP2P(conn net.Conn) (err error) {
+func (client *Client) DoRequestP2P(conn net.Conn, pkHash []byte) (err error) {
 	_, err = util.WriteString(conn, common.RequestPTP.String())
+	if err != nil {
+		log.Error("Error writing to server")
+		return err
+	}
+	command, err := util.ReadString(conn)
+	if command != "GKEY" || err != nil {
+		return common.UnknownCommandError
+	}
+
+	_, err = util.WriteBytes(conn, pkHash)
+	if err != nil {
+		return err
+	}
+	peerLocalAddr, err := util.ReadString(conn)
+	peerPublicAddr, err := util.ReadString(conn)
+	err = DoOpenHolePunch(peerLocalAddr, peerPublicAddr)
+	return err
+}
+
+func DoOpenHolePunch(addr1 string, addr2 string) (err error) {
+	log.Info("Local Addr: ", addr1, "Public Addr: ", addr2)
 
 	return err
 }
 
-// DoSendPubKeyHash TODO finish implementation
-func (client *Client) DoSendPubKeyHash(pkhash []byte) (err error) {
-	b, c := client.findContact(pkhash)
-	if b == false {
-		log.Error("Contact Not Found")
-		return err
-	}
-	if c.PubKeyHash == nil {
-		log.Debug("Creating Hash")
-		c.PubKeyHash = cryptography.PemToSha256(c.PubKey)
-	}
-	if _, err = util.WriteBytes(client.conn, c.PubKeyHash); err != nil {
-		return err
-	}
-	return client.getResult(client.conn)
-}
-
-// DoSendLocalIP TODO change if using UDP
+// DoSendLocalIP sends local ip to conn
+// returns error is applicable
 func (client *Client) DoSendLocalIP() (err error) {
-	client.localAddr, _ = net.ResolveTCPAddr("tcp", strconv.Itoa(int(client.LocalPort)))
+	client.localAddr = client.conn.LocalAddr()
 	if _, err = util.WriteString(client.conn, client.localAddr.String()); err != nil {
 		return err
 	}
