@@ -20,18 +20,21 @@ import (
 )
 
 const (
-	keyPath = "./"
+	keyPath  = "./"
+	dataPath = "./data/"
 )
 
 type Client struct {
 	ServerHost  string `yaml:"server_host"`
 	ServerPort  uint16 `yaml:"server_port"`
+	LocalPort   uint16 `yaml:"local_port"`
 	KeyPath     string `yaml:"key_path"`
 	DataPath    string `yaml:"data_path"`
 	tlsConfig   *tls.Config
 	privKey     *rsa.PrivateKey
 	pubKeyBlock *pem.Block
 	conn        net.Conn
+	localAddr   *net.TCPAddr
 	addCode     string
 	contactList []Contact
 }
@@ -48,12 +51,15 @@ func InitConfig() (client *Client, err error) {
 	client = &Client{
 		ServerHost:  "127.0.0.1",
 		ServerPort:  9129,
+		LocalPort:   10378,
 		tlsConfig:   &tls.Config{InsecureSkipVerify: true}, // TODO: Update after using trusted cert
 		privKey:     nil,
 		pubKeyBlock: nil,
 		conn:        nil,
+		localAddr:   nil,
 		addCode:     "",
 		KeyPath:     keyPath,
+		DataPath:    dataPath,
 	}
 	return client, nil
 }
@@ -85,7 +91,7 @@ func (client *Client) HandleGetPubKey(conn net.Conn) (err error) {
 		log.Error("Error while sending public key")
 		return err
 	}
-	// TODO: Write error code to conn?
+	// HandleGetPubkey TODO: Write error code to conn?
 	return nil
 }
 
@@ -142,7 +148,7 @@ func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
 	if _, err = util.WriteString(client.conn, rxPubKeyHash); err != nil {
 		return err
 	}
-	// TODO: Finish implementing
+	// DoRequestRelay TODO: Finish implementing
 
 	return client.getResult(client.conn)
 }
@@ -207,28 +213,35 @@ func (client *Client) Disconnect() (err error) {
 	return nil
 }
 
-func (client *Client) DoHolePunchInit() (err error) {
-	if _, err = util.WriteString(client.conn, common.RequestPTPip.String()); err != nil {
+func (client *Client) DoRequestP2P(conn net.Conn) (err error) {
+	_, err = util.WriteString(conn, common.RequestPTP.String())
+
+	return err
+}
+
+// DoSendPubKeyHash TODO finish implementation
+func (client *Client) DoSendPubKeyHash(pkhash []byte) (err error) {
+	b, c := client.findContact(pkhash)
+	if b == false {
+		log.Error("Contact Not Found")
 		return err
 	}
-	ptp, err := util.ReadString(client.conn) // should return command "GKEY" asking for pubkey of client 2
-	if err != nil {
-		log.Debug(err)
-		log.Error("Error while connecting to the server")
+	if c.PubKeyHash == nil {
+		log.Debug("Creating Hash")
+		c.PubKeyHash = cryptography.PemToSha256(c.PubKey)
+	}
+	if _, err = util.WriteBytes(client.conn, c.PubKeyHash); err != nil {
 		return err
 	}
-	if ptp != "GKEY" {
-		log.Debug("Wrong command received, expected 'GKEY'")
-		log.Error("Wrong command received from server (holepunch)")
-		return err
-	}
-	// should select pubkey to send here
 	return client.getResult(client.conn)
 }
 
-// TODO finish implementation
-func (client *Client) DoSendPubKey() (err error) {
-
+// DoSendLocalIP TODO change if using UDP
+func (client *Client) DoSendLocalIP() (err error) {
+	client.localAddr, _ = net.ResolveTCPAddr("tcp", strconv.Itoa(int(client.LocalPort)))
+	if _, err = util.WriteString(client.conn, client.localAddr.String()); err != nil {
+		return err
+	}
 	return client.getResult(client.conn)
 }
 
@@ -285,7 +298,7 @@ func (client *Client) WriteContactsFile() (err error) {
 	return dataEncoder.Encode(client.contactList)
 }
 
-// TODO change client.contactList from slice to map
+// Contacts TODO change client.contactList from slice to map,  key : PubKeyHash
 // addContact initializes new contact struct
 // returns true if contact added or already in list, false otherwise
 func (client *Client) addContact(fname string, lname string, pkhash []byte, pubkey *pem.Block) (inserted bool) {

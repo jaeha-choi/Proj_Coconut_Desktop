@@ -21,6 +21,7 @@ func main() {
 
 	serverHostFlag := flag.String("host", "", "Server address")
 	serverPortFlag := flag.Int("port", 0, "Server port")
+	localPortFlag := flag.Int("local-port", 0, "Local port")
 	keyPathFlag := flag.String("cert-path", "", "Key pair path")
 	dataPathFlag := flag.String("data-path", "", "Data path")
 
@@ -74,6 +75,12 @@ func main() {
 	if 0 < *serverPortFlag && *serverPortFlag < 65536 {
 		cli.ServerPort = uint16(*serverPortFlag)
 	} else if *serverPortFlag != 0 {
+		log.Fatal("Provided port out of range")
+		os.Exit(1)
+	}
+	if 0 < *localPortFlag && *localPortFlag < 65536 {
+		cli.LocalPort = uint16(*localPortFlag)
+	} else if *localPortFlag != 0 {
 		log.Fatal("Provided port out of range")
 		os.Exit(1)
 	}

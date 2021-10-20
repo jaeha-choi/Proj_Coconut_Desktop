@@ -1,4 +1,5 @@
 server_host: 127.0.0.1
 server_port: 9129
+local_port: 10378
 key_path: ./
 data_path: ./data/
