@@ -240,6 +240,9 @@ func (client *Client) DoRequestP2P(conn net.Conn, pkHash []byte) (err error) {
 // returns connection stored in client.peer is connection made
 func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
 	log.Info("Local Addr: ", addr1, ", Public Addr: ", addr2)
+
+	// create WaitGroup to halt processes until
+	// both initPrivateAddr and initRemoteAddr complete
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -248,7 +251,9 @@ func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
 	wg.Add(1)
 	go client.initRemoteAddr(&wg, addr2)
 
+	// wait for goroutines to finish
 	wg.Wait()
+
 	if client.peer != nil {
 		log.Info("Connection made to: ", client.peer.RemoteAddr())
 	} else {
@@ -261,6 +266,8 @@ func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
 	return err
 }
 
+// initPrivateAddr initialize a connection with the private address provided
+// sets client.peer to peer net.Conn is connection successful
 func (client *Client) initPrivateAddr(wg *sync.WaitGroup, addr string) {
 	defer wg.Done()
 	privBuffer := make([]byte, 1024)
@@ -269,8 +276,10 @@ func (client *Client) initPrivateAddr(wg *sync.WaitGroup, addr string) {
 		log.Debug("Unable to connect: ", addr)
 		return
 	}
-	log.Debug("Connection success: ", priv.RemoteAddr())
+	log.Info("Connection success: ", priv.RemoteAddr())
 	client.peer = priv
+	// TODO uncomment next line if `common.HolePunchPing.String()` exists
+	//	_, _ = priv.Write([]byte(common.HolePunchPing.String()))
 	_, _ = priv.Write([]byte("PING"))
 	_, _ = priv.Read(privBuffer)
 	//i, _ := priv.Read(privBuffer)
@@ -278,6 +287,8 @@ func (client *Client) initPrivateAddr(wg *sync.WaitGroup, addr string) {
 
 }
 
+// initRemoteAddr initialize a connection with the private address provided
+// sets client.peer to peer net.Conn is connection successful
 func (client *Client) initRemoteAddr(wg *sync.WaitGroup, addr string) {
 	defer wg.Done()
 	pubBuffer := make([]byte, 1024)
@@ -286,8 +297,10 @@ func (client *Client) initRemoteAddr(wg *sync.WaitGroup, addr string) {
 		log.Debug("Unable to connect: ", addr)
 		return
 	}
-	log.Debug("Connection success: ", pub.RemoteAddr())
+	log.Info("Connection success: ", pub.RemoteAddr())
 	client.peer = pub
+	// TODO uncomment next line if `common.HolePunchPing.String()` exists
+	//	_, _ = pub.Write([]byte(common.HolePunchPing.String()))
 	_, _ = pub.Write([]byte("PING"))
 	_, _ = pub.Read(pubBuffer)
 	//i, _ := pub.Read(pubBuffer)
