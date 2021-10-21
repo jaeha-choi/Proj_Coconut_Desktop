@@ -11,8 +11,8 @@ func init() {
 }
 
 func TestDoOpenHolePunch(t *testing.T) {
-	client, err := InitConfig()
-	err = client.DoOpenHolePunch("127.0.0.1:1234", "127.0.0.1:28282")
+	client := InitConfig()
+	err := client.DoOpenHolePunch("127.0.0.1:1234", "127.0.0.1:28282")
 	if err != nil {
 		t.Error(err)
 	}
@@ -78,7 +78,7 @@ func TestDoOpenHolePunch(t *testing.T) {
 //	if err != nil {
 //		t.Error(err)
 //	}
-//	if client.contactList != nil {
+//	if client.contactMap != nil {
 //		t.Error("Error initializing contact list")
 //	}
 //	log.Debug("file read")
@@ -105,9 +105,9 @@ func TestDoOpenHolePunch(t *testing.T) {
 //		t.Error(err)
 //	}
 //	log.Debug("file write")
-//	client.contactList = nil
+//	client.contactMap = nil
 //	err = client.ReadContactsFile()
-//	if client.contactList == nil {
+//	if client.contactMap == nil {
 //		t.Error("Error opening contacts file")
 //	}
 //	log.Debug("file read 2")
@@ -137,20 +137,20 @@ func TestDoOpenHolePunch(t *testing.T) {
 //		log.Debug("contact not found")
 //	}
 //
-//	if client.removeContact([]byte("123456")) {
+//	if client.RemoveContact([]byte("123456")) {
 //		log.Debug("successfully removed")
 //	} else {
 //		log.Debug("could not find contact")
 //	}
-//	if client.removeContact([]byte("123556")) {
+//	if client.RemoveContact([]byte("123556")) {
 //		log.Debug("successfully removed")
 //	} else {
 //		log.Debug("could not find contact")
 //	}
-//	if client.removeContact([]byte("abcdef")) {
+//	if client.RemoveContact([]byte("abcdef")) {
 //		log.Debug("successfully removed")
 //	} else {
 //		log.Debug("could not find contact")
 //	}
-//	log.Debug(client.contactList)
+//	log.Debug(client.contactMap)
 //}

@@ -400,7 +400,7 @@ func (ui *UIStatus) handleStatusClick(_ *gtk.EventBox, event *gdk.Event) {
 }
 
 // handleAddCodeDone handles event when Add Code was entered
-// WIP
+// TODO: WIP
 func (ui *UIStatus) handleAddCodeDone(entry *gtk.Entry, event *gdk.Event) {
 	log.Debug("addCodeDone called")
 	eventKey := gdk.EventKeyNewFromEvent(event)

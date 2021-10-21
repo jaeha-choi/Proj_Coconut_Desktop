@@ -51,11 +51,7 @@ func main() {
 	// Read configurations
 	if cli, err = client.ReadConfig(*confPath); err != nil {
 		log.Warning("Could not read config, trying default config")
-		if cli, err = client.InitConfig(); err != nil {
-			log.Debug(err)
-			log.Fatal("Could not load default config")
-			os.Exit(1)
-		}
+		cli = client.InitConfig()
 		if err := util.WriteConfig(*confPath, cli); err != nil {
 			log.Debug(err)
 			log.Warning("Could not save config")
