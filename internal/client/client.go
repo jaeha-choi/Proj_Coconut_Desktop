@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 )
 
 const (
@@ -34,6 +35,7 @@ type Client struct {
 	privKey     *rsa.PrivateKey
 	pubKeyBlock *pem.Block
 	conn        net.Conn
+	peer        net.Conn
 	localAddr   net.Addr
 	addCode     string
 	contactList []Contact
@@ -230,14 +232,66 @@ func (client *Client) DoRequestP2P(conn net.Conn, pkHash []byte) (err error) {
 	}
 	peerLocalAddr, err := util.ReadString(conn)
 	peerPublicAddr, err := util.ReadString(conn)
-	err = DoOpenHolePunch(peerLocalAddr, peerPublicAddr)
+	err = client.DoOpenHolePunch(peerLocalAddr, peerPublicAddr)
 	return err
 }
 
-func DoOpenHolePunch(addr1 string, addr2 string) (err error) {
-	log.Info("Local Addr: ", addr1, "Public Addr: ", addr2)
+// DoOpenHolePunch Initiates the connection between client and peer
+// returns connection stored in client.peer is connection made
+func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
+	log.Info("Local Addr: ", addr1, ", Public Addr: ", addr2)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+	go client.initPrivateAddr(&wg, addr1)
+
+	wg.Add(1)
+	go client.initRemoteAddr(&wg, addr2)
+
+	wg.Wait()
+	if client.peer != nil {
+		log.Info("Connection made to: ", client.peer.RemoteAddr())
+	} else {
+		log.Error("Unable to establish connection to peer")
+		// TODO uncomment next line
+		//return PeerUnavailableError
+		return nil
+	}
 
 	return err
+}
+
+func (client *Client) initPrivateAddr(wg *sync.WaitGroup, addr string) {
+	defer wg.Done()
+	privBuffer := make([]byte, 1024)
+	priv, err := net.Dial("tcp", addr)
+	if err != nil {
+		log.Debug("Unable to connect: ", addr)
+		return
+	}
+	log.Debug("Connection success: ", priv.RemoteAddr())
+	client.peer = priv
+	_, _ = priv.Write([]byte("PING"))
+	_, _ = priv.Read(privBuffer)
+	//i, _ := priv.Read(privBuffer)
+	//log.Debug(string(privBuffer[:i]))
+
+}
+
+func (client *Client) initRemoteAddr(wg *sync.WaitGroup, addr string) {
+	defer wg.Done()
+	pubBuffer := make([]byte, 1024)
+	pub, err := net.Dial("tcp", addr)
+	if err != nil {
+		log.Debug("Unable to connect: ", addr)
+		return
+	}
+	log.Debug("Connection success: ", pub.RemoteAddr())
+	client.peer = pub
+	_, _ = pub.Write([]byte("PING"))
+	_, _ = pub.Read(pubBuffer)
+	//i, _ := pub.Read(pubBuffer)
+	//log.Debug(string(pubBuffer[:i]))
 }
 
 // DoSendLocalIP sends local ip to conn

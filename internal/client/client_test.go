@@ -1,7 +1,6 @@
 package client
 
 import (
-	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"os"
 	"testing"
@@ -11,58 +10,57 @@ func init() {
 	log.Init(os.Stdout, log.DEBUG)
 }
 
-//TODO: Test with demo server
-// both clients connect to server
-// client1 adds client 2 via add code
-// client1 sends P2P request to server
-// server asks for pubkey hash
-// client1 hashes client2 pubkey and sends to server
-// client2 receives client1 local and remote ip/port
-// client1 receives client2 local and remote ip/port
-// client1 and client2 send init packets to both locations
-// client1 sends file to client 2
-func TestConnect(t *testing.T) {
+func TestDoOpenHolePunch(t *testing.T) {
 	client, err := InitConfig()
+	err = client.DoOpenHolePunch("127.0.0.1:1234", "127.0.0.1:28282")
 	if err != nil {
 		t.Error(err)
 	}
-	if err != nil {
-		return
-	}
-	log.Debug("init")
-	pubBlock, privBlock, err := cryptography.OpenKeys(client.KeyPath)
-	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
-	client.pubKeyBlock = pubBlock
-	client.privKey, err = cryptography.PemToKeys(privBlock)
-	if err != nil {
-		log.Fatal(err)
-		os.Exit(1)
-	}
-	defer func() {
-		err = client.Disconnect()
-	}()
 
-	err = client.Connect()
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	log.Debug("connect")
-
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	err = client.DoRequestP2P(client.conn, []byte("abcd"))
-	if err != nil {
-		log.Error(err)
-	}
-	log.Debug("holepunch")
 }
+
+//func TestConnect(t *testing.T) {
+//	client, err := InitConfig()
+//	if err != nil {
+//		t.Error(err)
+//	}
+//	if err != nil {
+//		return
+//	}
+//	log.Debug("init")
+//	pubBlock, privBlock, err := cryptography.OpenKeys(client.KeyPath)
+//	if err != nil {
+//		log.Fatal(err)
+//		os.Exit(1)
+//	}
+//	client.pubKeyBlock = pubBlock
+//	client.privKey, err = cryptography.PemToKeys(privBlock)
+//	if err != nil {
+//		log.Fatal(err)
+//		os.Exit(1)
+//	}
+//	defer func() {
+//		err = client.Disconnect()
+//	}()
+//
+//	err = client.Connect()
+//	if err != nil {
+//		t.Error(err)
+//		return
+//	}
+//
+//	log.Debug("connect")
+//
+//	if err != nil {
+//		t.Error(err)
+//		return
+//	}
+//	err = client.DoRequestP2P(client.conn, []byte(""))
+//	if err != nil {
+//		log.Error(err)
+//	}
+//	log.Debug("holepunch")
+//}
 
 //func TestGOBReadWrite(t *testing.T) {
 //	client, err := InitConfig()
