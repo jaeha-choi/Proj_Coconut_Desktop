@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 )
 
 const (
@@ -132,18 +133,18 @@ func (client *Client) getResult(command *common.Command) (err error) {
 
 func (client *Client) commandHandler() {
 	for {
-		// TODO: Gracefully close client.conn
 		msg, err := util.ReadMessage(client.conn)
-		if err != nil {
+		if err == io.EOF {
+			break
+		} else if err != nil {
 			log.Debug(err)
 			break
 		}
 		command := common.CommandCodes[msg.CommandCode]
-		switch command {
-		case common.GetPubKey:
+		if c, ok := client.chanMap[command.String]; ok {
+			c <- msg
+		} else if command == common.GetPubKey {
 			err = client.handleGetPubKey()
-		default:
-			client.chanMap[command.String] <- msg
 		}
 	}
 }
@@ -180,12 +181,15 @@ func (client *Client) Disconnect() (err error) {
 		log.Error("Task is not complete")
 		return common.TaskNotCompleteError
 	}
+	// Timer allows graceful shutdown for client.conn
+	time.Sleep(1 * time.Second)
 	if err = client.conn.Close(); err != nil {
 		log.Debug(err)
 		log.Error("Error while disconnecting from the server")
 		return err
 	}
 	client.conn = nil
+	log.Debug("Disconnected")
 	return nil
 }
 
@@ -193,6 +197,7 @@ func (client *Client) Disconnect() (err error) {
 func (client *Client) handleGetPubKey() (err error) {
 	var command = common.GetAddCode
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
 
 	if _, err = util.WriteMessage(client.conn, client.pubKeyBlock.Bytes, nil, command); err != nil {
 		log.Debug(err)
@@ -207,6 +212,7 @@ func (client *Client) handleGetPubKey() (err error) {
 func (client *Client) doInit() (err error) {
 	var command = common.Init
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
 
 	pubKeyHash := cryptography.PemToSha256(client.pubKeyBlock)
 	if _, err = util.WriteMessage(client.conn, pubKeyHash, nil, command); err != nil {
@@ -227,6 +233,7 @@ func (client *Client) doInit() (err error) {
 func (client *Client) doQuit() (err error) {
 	var command = common.Quit
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
 
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		log.Debug(err)
@@ -242,6 +249,7 @@ func (client *Client) doQuit() (err error) {
 func (client *Client) DoGetAddCode() (err error) {
 	var command = common.GetAddCode
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
 
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		return err
@@ -256,6 +264,7 @@ func (client *Client) DoGetAddCode() (err error) {
 func (client *Client) DoRemoveAddCode() (err error) {
 	var command = common.RemoveAddCode
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
 
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		return err
@@ -273,6 +282,7 @@ func (client *Client) DoRemoveAddCode() (err error) {
 func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
 	var command = common.RequestRelay
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
 
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		return err
@@ -291,6 +301,7 @@ func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
 func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err error) {
 	var command = common.RequestPubKey
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
 
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		return err
