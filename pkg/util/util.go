@@ -292,7 +292,7 @@ func ReadBytesToWriter(reader io.Reader, writer io.Writer, writeWithSize bool) (
 		return 0, err
 	}
 
-	totalReceived, err := readWrite(reader, writer, size)
+	totalReceived, err := readWrite(reader, writer, size+2)
 	if err != nil {
 		return totalReceived, err
 	}
