@@ -16,7 +16,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 )
 
 const (
@@ -31,6 +30,8 @@ const (
 	defaultServerPort = 9129
 	// defaultLocalPort is a default port number that will be opened for P2P connection
 	defaultLocalPort = 10378
+	// bufferSize is a default buffer size for each channels
+	bufferSize = 10
 )
 
 // Client structure stores all necessary user data
@@ -63,6 +64,8 @@ type Client struct {
 	addCode string
 	// contactMap stores the map of Contact structures. Uses public key hash string as a key
 	contactMap map[string]*Contact
+	// chanMap stores the map of channels. Uses command string as a key
+	chanMap map[string]chan *util.Message
 }
 
 // Contact stores information about added contacts
@@ -92,6 +95,7 @@ func InitConfig() (client *Client) {
 		localAddr:   nil,
 		addCode:     "",
 		contactMap:  make(map[string]*Contact),
+		chanMap:     make(map[string]chan *util.Message),
 	}
 	return client
 }
@@ -116,9 +120,32 @@ func ReadConfig(fileName string) (client *Client, err error) {
 }
 
 // getResult is called at the end of each operation to check potential error
-func getResult(conn net.Conn) (err error) {
-	_, err = util.ReadBytes(conn)
-	return err
+func (client *Client) getResult(command *common.Command) (err error) {
+	msg := <-client.chanMap[command.String]
+	delete(client.chanMap, command.String)
+	errCode := common.ErrorCodes[msg.ErrorCode]
+	if errCode != nil {
+		return errCode
+	}
+	return nil
+}
+
+func (client *Client) commandHandler() {
+	for {
+		// TODO: Gracefully close client.conn
+		msg, err := util.ReadMessage(client.conn)
+		if err != nil {
+			log.Debug(err)
+			break
+		}
+		command := common.CommandCodes[msg.CommandCode]
+		switch command {
+		case common.GetPubKey:
+			err = client.handleGetPubKey()
+		default:
+			client.chanMap[command.String] <- msg
+		}
+	}
 }
 
 // Connect connects this client to the relay server and initializes the connection by calling doInit
@@ -136,6 +163,9 @@ func (client *Client) Connect() (err error) {
 		return err
 	}
 	log.Debug("Connected")
+
+	go client.commandHandler()
+
 	return client.doInit()
 }
 
@@ -161,7 +191,10 @@ func (client *Client) Disconnect() (err error) {
 
 // handleGetPubKey is called when the relay server requests this client's public key
 func (client *Client) handleGetPubKey() (err error) {
-	if _, err = util.WriteBytes(client.conn, client.pubKeyBlock.Bytes); err != nil {
+	var command = common.GetAddCode
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+
+	if _, err = util.WriteMessage(client.conn, client.pubKeyBlock.Bytes, nil, command); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending public key")
 		return err
@@ -172,172 +205,186 @@ func (client *Client) handleGetPubKey() (err error) {
 // doInit initializes the connection by sending this client's public key hash (SHA256) and
 // private IP address to the relay server
 func (client *Client) doInit() (err error) {
+	var command = common.Init
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+
 	pubKeyHash := cryptography.PemToSha256(client.pubKeyBlock)
-	if _, err = util.WriteBytes(client.conn, pubKeyHash); err != nil {
+	if _, err = util.WriteMessage(client.conn, pubKeyHash, nil, command); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending public key hash")
 		return err
 	}
-	if _, err = util.WriteString(client.conn, client.conn.LocalAddr().String()); err != nil {
+	if _, err = util.WriteMessage(client.conn, []byte(client.conn.LocalAddr().String()), nil, command); err != nil {
 		log.Debug(err)
 		log.Error("Error while sending local ip address")
 		return err
 	}
 
-	return getResult(client.conn)
+	return client.getResult(command)
 }
 
 // doQuit signals the relay server to unregister this client
 func (client *Client) doQuit() (err error) {
-	if _, err = util.WriteString(client.conn, common.Quit.String()); err != nil {
+	var command = common.Quit
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+
+	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		log.Debug(err)
 		log.Error("Error while quit command")
 		return err
 	}
 
-	return getResult(client.conn)
+	return client.getResult(command)
 }
 
 // DoGetAddCode signals the relay server to send the Add Code
 // Returns common.NoAvailableAddCodeError if no Add Code is available
 func (client *Client) DoGetAddCode() (err error) {
-	if _, err = util.WriteString(client.conn, common.GetAddCode.String()); err != nil {
-		return err
-	}
-	addCode, err := util.ReadBytes(client.conn)
-	if err != nil {
-		log.Debug(err)
-		return err
-	}
-	client.addCode = string(addCode)
+	var command = common.GetAddCode
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 
-	return getResult(client.conn)
+	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
+		return err
+	}
+	msg := <-client.chanMap[command.String]
+	client.addCode = string(msg.Data)
+
+	return client.getResult(command)
 }
 
 // DoRemoveAddCode signals the relay server to dissociate the Add Code from this client
 func (client *Client) DoRemoveAddCode() (err error) {
-	if _, err = util.WriteString(client.conn, common.RemoveAddCode.String()); err != nil {
+	var command = common.RemoveAddCode
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+
+	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		return err
 	}
-	if _, err = util.WriteString(client.conn, client.addCode); err != nil {
+	if _, err = util.WriteMessage(client.conn, []byte(client.addCode), nil, command); err != nil {
 		return err
 	}
 
-	return getResult(client.conn)
+	return client.getResult(command)
 }
 
 // DoRequestRelay signals the relay server to relay files between this client and
 // the client with matching rxPubKeyHash
 // TODO: WIP
 func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
-	if _, err = util.WriteString(client.conn, common.RequestRelay.String()); err != nil {
+	var command = common.RequestRelay
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+
+	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		return err
 	}
-	if _, err = util.WriteString(client.conn, rxPubKeyHash); err != nil {
+	if _, err = util.WriteMessage(client.conn, []byte(rxPubKeyHash), nil, command); err != nil {
 		return err
 	}
 	// Add file relay here
 
-	return getResult(client.conn)
+	return client.getResult(command)
 }
 
 // DoRequestPubKey signals the relay server to send public key associated with provided Add Code (rxAddCodeStr),
 // then save it as fileName
 // Returns common.ClientNotFoundError if no client is found
 func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err error) {
-	if _, err = util.WriteString(client.conn, common.RequestPubKey.String()); err != nil {
+	var command = common.RequestPubKey
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+
+	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		return err
 	}
-	if _, err = util.WriteString(client.conn, rxAddCodeStr); err != nil {
-		return err
-	}
-	rxPubKeyBytes, err := util.ReadBytes(client.conn)
-	if err != nil {
-		log.Debug(err)
-		return err
-	}
-	if err = cryptography.BytesToPemFile(rxPubKeyBytes, fileName); err != nil {
+	if _, err = util.WriteMessage(client.conn, []byte(rxAddCodeStr), nil, command); err != nil {
 		return err
 	}
 
-	return getResult(client.conn)
+	// Get rxPubKeyBytes
+	msg := <-client.chanMap[command.String]
+	if err = cryptography.BytesToPemFile(msg.Data, fileName); err != nil {
+		return err
+	}
+
+	return client.getResult(command)
 }
 
-// DoRequestP2P signals the relay server to ...
-// TODO: WIP
-func (client *Client) DoRequestP2P(conn net.Conn, pkHash []byte) (err error) {
-	_, err = util.WriteString(conn, common.RequestPTP.String())
-	if err != nil {
-		log.Error("Error writing to server")
-		return err
-	}
-	command, err := util.ReadString(conn)
-	if command != "GKEY" || err != nil {
-		return common.UnknownCommandError
-	}
-
-	_, err = util.WriteBytes(conn, pkHash)
-	if err != nil {
-		return err
-	}
-	peerLocalAddr, err := util.ReadString(conn)
-	peerPublicAddr, err := util.ReadString(conn)
-	err = client.DoOpenHolePunch(peerLocalAddr, peerPublicAddr)
-	return err
-}
-
-// DoOpenHolePunch Initiates the connection between client and peer
-// returns connection stored in client.peerConn is connection made
-// TODO: WIP
-func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
-	log.Info("Local Addr: ", addr1, ", Public Addr: ", addr2)
-
-	// create WaitGroup to halt processes until
-	// both initPrivateAddr and initRemoteAddr complete
-	var wg sync.WaitGroup
-
-	wg.Add(1)
-	go client.initP2PConn(&wg, addr1)
-
-	wg.Add(1)
-	go client.initP2PConn(&wg, addr2)
-
-	// wait for goroutines to finish
-	wg.Wait()
-
-	if client.peerConn != nil {
-		log.Info("Connection made to: ", client.peerConn.RemoteAddr())
-	} else {
-		log.Error("Unable to establish connection to peer")
-		// TODO uncomment next line
-		//return PeerUnavailableError
-		return nil
-	}
-
-	return err
-}
-
-// initP2PConn initialize a connection with the provided.
-// client.peerConn contains p2p connection if dialing was successful
-// TODO: WIP
-func (client *Client) initP2PConn(wg *sync.WaitGroup, addr string) {
-	defer wg.Done()
-	privBuffer := make([]byte, 1024)
-	p2p, err := net.Dial("tcp", addr)
-	if err != nil {
-		log.Debug("Unable to connect: ", addr)
-		return
-	}
-	log.Debug("Connection success: ", p2p.RemoteAddr())
-	client.peerConn = p2p
-	// TODO uncomment next line if `common.HolePunchPing.String()` exists
-	//	_, _ = p2p.Write([]byte(common.HolePunchPing.String()))
-	_, _ = p2p.Write([]byte("PING"))
-	_, _ = p2p.Read(privBuffer)
-	//i, _ := p2p.Read(privBuffer)
-	//log.Debug(string(privBuffer[:i]))
-
-}
+//// DoRequestP2P signals the relay server to ...
+//// TODO: WIP
+//func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
+//	var command = common.RequestPTP
+//	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+//
+//	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
+//		log.Error("Error writing to server")
+//		return err
+//	}
+//	command, err := util.ReadString(client.conn)
+//	if command != "GKEY" || err != nil {
+//		return common.UnknownCommandError
+//	}
+//
+//	_, err = util.WriteBytes(client.conn, pkHash)
+//	if err != nil {
+//		return err
+//	}
+//	peerLocalAddr, err := util.ReadString(client.conn)
+//	peerPublicAddr, err := util.ReadString(client.conn)
+//	err = client.DoOpenHolePunch(peerLocalAddr, peerPublicAddr)
+//	return err
+//}
+//
+//// DoOpenHolePunch Initiates the connection between client and peer
+//// returns connection stored in client.peerConn is connection made
+//// TODO: WIP
+//func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
+//	log.Info("Local Addr: ", addr1, ", Public Addr: ", addr2)
+//
+//	// create WaitGroup to halt processes until
+//	// both initPrivateAddr and initRemoteAddr complete
+//	var wg sync.WaitGroup
+//
+//	wg.Add(1)
+//	go client.initP2PConn(&wg, addr1)
+//
+//	wg.Add(1)
+//	go client.initP2PConn(&wg, addr2)
+//
+//	// wait for goroutines to finish
+//	wg.Wait()
+//
+//	if client.peerConn != nil {
+//		log.Info("Connection made to: ", client.peerConn.RemoteAddr())
+//	} else {
+//		log.Error("Unable to establish connection to peer")
+//		// TODO uncomment next line
+//		//return PeerUnavailableError
+//		return nil
+//	}
+//
+//	return err
+//}
+//
+//// initP2PConn initialize a connection with the provided.
+//// client.peerConn contains p2p connection if dialing was successful
+//// TODO: WIP
+//func (client *Client) initP2PConn(wg *sync.WaitGroup, addr string) {
+//	defer wg.Done()
+//	privBuffer := make([]byte, 1024)
+//	p2p, err := net.Dial("tcp", addr)
+//	if err != nil {
+//		log.Debug("Unable to connect: ", addr)
+//		return
+//	}
+//	log.Debug("Connection success: ", p2p.RemoteAddr())
+//	client.peerConn = p2p
+//	// TODO uncomment next line if `common.HolePunchPing.String()` exists
+//	//	_, _ = p2p.Write([]byte(common.HolePunchPing.String()))
+//	_, _ = p2p.Write([]byte("PING"))
+//	_, _ = p2p.Read(privBuffer)
+//	//i, _ := p2p.Read(privBuffer)
+//	//log.Debug(string(privBuffer[:i]))
+//
+//}
 
 //// initRemoteAddr initialize a connection with the private address provided
 //// sets client.peer to peer net.Conn is connection successful
