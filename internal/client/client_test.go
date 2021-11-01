@@ -3,21 +3,20 @@ package client
 import (
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"os"
-	"testing"
 )
 
 func init() {
 	log.Init(os.Stdout, log.DEBUG)
 }
 
-func TestDoOpenHolePunch(t *testing.T) {
-	client := InitConfig()
-	err := client.DoOpenHolePunch("127.0.0.1:1234", "127.0.0.1:28282")
-	if err != nil {
-		t.Error(err)
-	}
-
-}
+//func TestDoOpenHolePunch(t *testing.T) {
+//	client := InitConfig()
+//	err := client.DoOpenHolePunch("127.0.0.1:1234", "127.0.0.1:28282")
+//	if err != nil {
+//		t.Error(err)
+//	}
+//
+//}
 
 //func TestConnect(t *testing.T) {
 //	client, err := InitConfig()
