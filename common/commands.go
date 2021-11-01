@@ -68,32 +68,26 @@ var RequestP2P = &Command{
 	Code:   9,
 }
 
-//
-var RequestLocalIP = &Command{
-	String: "RLIP",
-	Code:   10,
-}
-
-//
+// GetLocalIP retrieve local ip of client
 var GetLocalIP = &Command{
 	String: "GLIP",
-	Code:   11,
+	Code:   10,
 }
 
 // HolePunchPING init command for p2p connection
 var HolePunchPING = &Command{
 	String: "PING",
-	Code:   12,
+	Code:   11,
 }
 
 // HolePunchPONG init reply to "PING" command
 var HolePunchPONG = &Command{
 	String: "PONG",
-	Code:   13,
+	Code:   12,
 }
 
 // File command is used when exchanging encrypted files
 var File = &Command{
 	String: "FILE",
-	Code:   14,
+	Code:   13,
 }
