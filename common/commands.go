@@ -16,7 +16,6 @@ var CommandCodes = [256]*Command{
 	RequestRelay,
 	GetP2PKey,
 	RequestP2P,
-	RequestLocalIP,
 	GetLocalIP,
 	HolePunchPING,
 	HolePunchPONG,
