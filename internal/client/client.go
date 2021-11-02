@@ -324,40 +324,40 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 	return client.getResult(command)
 }
 
-func (client *Client) handleRequestP2P(serv net.Conn) (err error) {
+func (client *Client) handleRequestP2P() (err error) {
 	var command = common.RequestP2P
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
 
 	// accept pkhash
-	msg, err := util.ReadMessage(serv)
+	msg, err := util.ReadMessage(client.conn)
 
 	// find relating peer
 	peerStruct, ok := client.contactMap[string(msg.Data)]
 	if !ok {
-		_, _ = util.WriteMessage(serv, nil, common.ClientNotFoundError, nil)
+		_, _ = util.WriteMessage(client.conn, nil, common.ClientNotFoundError, nil)
 		return common.ClientNotFoundError
 	}
 	peer := *peerStruct
 	log.Info("Peer: ", peer.PubKeyHash)
 
 	// ask for local ip ("LCIP")
-	_, err = util.WriteMessage(serv, []byte("LCIP"), nil, nil)
+	_, err = util.WriteMessage(client.conn, []byte("LCIP"), nil, nil)
 	if err != nil {
 		return err
 	}
-	msg, err = util.ReadMessage(serv)
+	msg, err = util.ReadMessage(client.conn)
 	if msg.ErrorCode != 0 {
 		return common.ErrorCodes[msg.ErrorCode].Unwrap()
 	}
 	peerLocalAddr := msg.Data
 	log.Info("Peer local address: ", peerLocalAddr)
 	// ask for remote ip ("PBIP")
-	_, err = util.WriteMessage(serv, []byte("PBIP"), nil, nil)
+	_, err = util.WriteMessage(client.conn, []byte("PBIP"), nil, nil)
 	if err != nil {
 		return err
 	}
-	msg, err = util.ReadMessage(serv)
+	msg, err = util.ReadMessage(client.conn)
 	if msg.ErrorCode != 0 {
 		return common.ErrorCodes[msg.ErrorCode].Unwrap()
 	}
