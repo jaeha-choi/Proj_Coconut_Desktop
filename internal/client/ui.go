@@ -91,13 +91,13 @@ func Start(uiGladePath string, client *Client) {
 	application.Connect("activate", func() {
 		var err error
 		// Open RSA Keys
-		pubBlock, privBlock, err := cryptography.OpenKeys(client.KeyPath)
+		pubBlock, err := cryptography.OpenKeysAsBlock(client.KeyPath, "key.pub")
+		//privBlock, err := cryptography.OpenPrivKey(client.KeyPath, "key.priv")
 		if err != nil {
 			log.Fatal(err)
 			os.Exit(1)
 		}
 		stat.client.pubKeyBlock = pubBlock
-		stat.client.privKey, err = cryptography.PemToKeys(privBlock)
 		if err != nil {
 			log.Fatal(err)
 			os.Exit(1)

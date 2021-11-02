@@ -1,22 +1,35 @@
 package client
 
 import (
-	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
-	"os"
+	"fmt"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
+	"testing"
+	//"time"
 )
 
-func init() {
-	log.Init(os.Stdout, log.DEBUG)
+func initClient() Client {
+	client := InitConfig()
+	pubBlock, _ := cryptography.OpenKeysAsBlock(client.KeyPath, "key.pub")
+	privBlock, _ := cryptography.OpenPrivKey(client.KeyPath, "key.priv")
+	client.pubKeyBlock = pubBlock
+	client.privKey = privBlock
+	return *client
 }
 
-//func TestDoOpenHolePunch(t *testing.T) {
-//	client := InitConfig()
-//	err := client.DoOpenHolePunch("127.0.0.1:1234", "127.0.0.1:28282")
-//	if err != nil {
-//		t.Error(err)
-//	}
-//
-//}
+func TestDoOpenHolePunch(t *testing.T) {
+	client := initClient()
+	defer func() {
+		_ = client.Disconnect()
+	}()
+	err := client.Connect()
+	var key string
+	_, _ = fmt.Scanln(&key)
+	err = client.DoRequestP2P([]byte(key))
+	if err != nil {
+		t.Error(err)
+	}
+
+}
 
 //func TestConnect(t *testing.T) {
 //	client, err := InitConfig()
