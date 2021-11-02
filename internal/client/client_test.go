@@ -31,6 +31,19 @@ func TestDoOpenHolePunch(t *testing.T) {
 
 }
 
+func TestDoOpenHolePunch2(t *testing.T) {
+	client := initClient()
+	defer func() {
+		_ = client.Disconnect()
+	}()
+	err := client.Connect()
+	err = client.handleRequestP2P()
+	if err != nil {
+		t.Error(err)
+	}
+
+}
+
 //func TestConnect(t *testing.T) {
 //	client, err := InitConfig()
 //	if err != nil {
