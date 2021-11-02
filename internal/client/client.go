@@ -84,7 +84,8 @@ type Contact struct {
 // InitConfig initializes a default Client struct.
 func InitConfig() (client *Client) {
 	client = &Client{
-		ServerHost:  "coconut-demo.jaeha.dev", // TODO: update this value after deploying the relay server
+		// TODO: for some reason server host is not being set to value in config.yml
+		ServerHost:  "127.0.0.1", // TODO: update this value after deploying the relay server
 		ServerPort:  defaultServerPort,
 		LocalPort:   defaultLocalPort,
 		KeyPath:     keyPath,
@@ -323,7 +324,50 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 	return client.getResult(command)
 }
 
-// DoRequestP2P signals the relay server to ...
+func (client *Client) handleRequestP2P(serv net.Conn) (err error) {
+	var command = common.RequestP2P
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
+
+	// accept pkhash
+	msg, err := util.ReadMessage(serv)
+
+	// find relating peer
+	peerStruct, ok := client.contactMap[string(msg.Data)]
+	if !ok {
+		_, _ = util.WriteMessage(serv, nil, common.ClientNotFoundError, nil)
+		return common.ClientNotFoundError
+	}
+	peer := *peerStruct
+	log.Info("Peer: ", peer.PubKeyHash)
+
+	// ask for local ip ("LCIP")
+	_, err = util.WriteMessage(serv, []byte("LCIP"), nil, nil)
+	if err != nil {
+		return err
+	}
+	msg, err = util.ReadMessage(serv)
+	if msg.ErrorCode != 0 {
+		return common.ErrorCodes[msg.ErrorCode].Unwrap()
+	}
+	peerLocalAddr := msg.Data
+	log.Info("Peer local address: ", peerLocalAddr)
+	// ask for remote ip ("PBIP")
+	_, err = util.WriteMessage(serv, []byte("PBIP"), nil, nil)
+	if err != nil {
+		return err
+	}
+	msg, err = util.ReadMessage(serv)
+	if msg.ErrorCode != 0 {
+		return common.ErrorCodes[msg.ErrorCode].Unwrap()
+	}
+	peerRemoteAddr := msg.Data
+	log.Info("Peer remote address: ", peerRemoteAddr)
+	err = client.DoOpenHolePunch(string(peerLocalAddr), string(peerRemoteAddr))
+	return client.getResult(command)
+}
+
+// DoRequestP2P signals the relay server that a client wants to connect to another client
 // TODO: WIP
 func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 	var command = common.RequestP2P
