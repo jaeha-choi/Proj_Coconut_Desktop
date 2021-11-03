@@ -398,7 +398,15 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 	log.Info("4")
 
 	peerLocalAddr := <-client.chanMap[command.String]
+	if peerLocalAddr.ErrorCode != 0 {
+		return common.ErrorCodes[peerLocalAddr.ErrorCode]
+	}
+	log.Info("5", string(peerLocalAddr.Data))
 	peerPublicAddr := <-client.chanMap[command.String]
+	if peerPublicAddr.ErrorCode != 0 {
+		return common.ErrorCodes[peerPublicAddr.ErrorCode]
+	}
+	log.Info("6", string(peerPublicAddr.Data))
 	err = client.DoOpenHolePunch(string(peerLocalAddr.Data), string(peerPublicAddr.Data))
 	return err
 }
