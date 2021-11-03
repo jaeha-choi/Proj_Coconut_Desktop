@@ -330,7 +330,7 @@ func (client *Client) handleRequestP2P() (err error) {
 	defer delete(client.chanMap, command.String)
 
 	// accept pkhash
-	msg, err := util.ReadMessage(client.conn)
+	msg := <-client.chanMap[command.String]
 
 	// find relating peer
 	peerStruct, ok := client.contactMap[string(msg.Data)]
@@ -346,9 +346,9 @@ func (client *Client) handleRequestP2P() (err error) {
 	if err != nil {
 		return err
 	}
-	msg, err = util.ReadMessage(client.conn)
+	msg = <-client.chanMap[command.String]
 	if msg.ErrorCode != 0 {
-		return common.ErrorCodes[msg.ErrorCode].Unwrap()
+		return common.ErrorCodes[msg.ErrorCode]
 	}
 	peerLocalAddr := msg.Data
 	log.Info("Peer local address: ", peerLocalAddr)
@@ -357,9 +357,9 @@ func (client *Client) handleRequestP2P() (err error) {
 	if err != nil {
 		return err
 	}
-	msg, err = util.ReadMessage(client.conn)
+	msg = <-client.chanMap[command.String]
 	if msg.ErrorCode != 0 {
-		return common.ErrorCodes[msg.ErrorCode].Unwrap()
+		return common.ErrorCodes[msg.ErrorCode]
 	}
 	peerRemoteAddr := msg.Data
 	log.Info("Peer remote address: ", peerRemoteAddr)
@@ -377,12 +377,28 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 		log.Error("Error writing to server")
 		return err
 	}
+	log.Info("1")
+	//Read error code for finding tx client
+	msg := <-client.chanMap[command.String]
+	if msg.ErrorCode != 0 {
+		return common.ErrorCodes[msg.ErrorCode]
+	}
+	log.Info("2")
+
 	_, err = util.WriteMessage(client.conn, pkHash, nil, command)
 	if err != nil {
 		return err
 	}
-	peerLocalAddr, err := util.ReadMessage(client.conn)
-	peerPublicAddr, err := util.ReadMessage(client.conn)
+	log.Info("3")
+
+	// Read error code for finding rx client
+	if msg := <-client.chanMap[command.String]; msg.ErrorCode != 0 {
+		return common.ErrorCodes[msg.ErrorCode]
+	}
+	log.Info("4")
+
+	peerLocalAddr := <-client.chanMap[command.String]
+	peerPublicAddr := <-client.chanMap[command.String]
 	err = client.DoOpenHolePunch(string(peerLocalAddr.Data), string(peerPublicAddr.Data))
 	return err
 }

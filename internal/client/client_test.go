@@ -1,7 +1,6 @@
 package client
 
 import (
-	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"testing"
@@ -25,7 +24,7 @@ func TestDoOpenHolePunch(t *testing.T) {
 	}()
 	err := client.Connect()
 	var key string
-	_, _ = fmt.Scanln(&key)
+	key = "5P3jG+vfufBnwSxEuhrZei6H4ZbHuKCd/XnqpvLLMSI="
 	err = client.DoRequestP2P([]byte(key))
 	if err != nil {
 		t.Error(err)
