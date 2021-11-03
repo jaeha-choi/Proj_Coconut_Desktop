@@ -44,7 +44,7 @@ func TestDoOpenHolePunch2(t *testing.T) {
 		_ = client.Disconnect()
 	}()
 	err := client.Connect()
-	client.addContact("jaeha", "choi", []byte("su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="), nil)
+	client.addContact("jaeha", "choi", []byte("giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598="), nil)
 	if err != nil {
 		t.Error(err)
 	}

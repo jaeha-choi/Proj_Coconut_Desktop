@@ -422,7 +422,7 @@ func (client *Client) openHolePunchClient(ClientServer string, command *common.C
 	localAddr, _ := net.ResolveUDPAddr("udp", addr1)
 	remoteAddr, _ := net.ResolveUDPAddr("udp", addr2)
 	if ClientServer == "S" {
-		remoteListener, err := net.ListenUDP("udp", remoteAddr)
+		remoteListener, err := net.ListenUDP("udp", lAddr)
 		if err != nil {
 			log.Debug(err)
 		}
@@ -442,7 +442,7 @@ func (client *Client) openHolePunchClient(ClientServer string, command *common.C
 			_, _ = util.WriteMessage(client.peerConn, []byte("PING LOCAL"), nil, command)
 		}
 	} else if ClientServer == "C" {
-		localListener, err := net.ListenUDP("udp", localAddr)
+		localListener, err := net.ListenUDP("udp", lAddr)
 		if err != nil {
 			return err
 		}
