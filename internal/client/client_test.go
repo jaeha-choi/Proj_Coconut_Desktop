@@ -2,7 +2,7 @@ package client
 
 import (
 	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
-	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"testing"
 	//"time"
 )
@@ -38,12 +38,10 @@ func TestDoOpenHolePunch2(t *testing.T) {
 		_ = client.Disconnect()
 	}()
 	err := client.Connect()
-	_, _ = util.ReadMessage(client.conn)
-	err = client.handleRequestP2P()
 	if err != nil {
 		t.Error(err)
 	}
-
+	log.Info("breakpoint here")
 }
 
 //func TestConnect(t *testing.T) {

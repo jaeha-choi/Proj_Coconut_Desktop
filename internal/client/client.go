@@ -146,6 +146,8 @@ func (client *Client) commandHandler() {
 			c <- msg
 		} else if command == common.GetPubKey {
 			err = client.handleGetPubKey()
+		} else if command == common.RequestP2P {
+			err = client.handleRequestP2P()
 		}
 	}
 }
