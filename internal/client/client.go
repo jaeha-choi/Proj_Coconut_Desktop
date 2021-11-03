@@ -414,10 +414,17 @@ func (client *Client) openHolePunchClient(command *common.Command, addr1 string,
 	// resolve local and remote addresses
 	localAddr, _ := net.ResolveUDPAddr("udp", addr1)
 	remoteAddr, _ := net.ResolveUDPAddr("udp", addr2)
+	lAddr, _ := net.ResolveUDPAddr("udp", client.conn.LocalAddr().String())
 	log.Debug("1")
 	// listen to both addresses
-	localListener, err := net.ListenUDP("udp", localAddr)
-	remoteListener, err := net.ListenUDP("udp", remoteAddr)
+	localListener, err := net.DialUDP("udp", lAddr, localAddr)
+	if err != nil {
+		log.Debug(err)
+	}
+	remoteListener, err := net.DialUDP("udp", lAddr, remoteAddr)
+	if err != nil {
+		log.Debug(err)
+	}
 	log.Debug("2")
 	// write messages to both local and remote
 	_, _ = util.WriteMessage(localListener, []byte("PING LOCAL"), nil, command)

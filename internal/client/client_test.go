@@ -27,7 +27,7 @@ func TestDoOpenHolePunch(t *testing.T) {
 	}()
 	err := client.Connect()
 	var key string
-	key = "5P3jG+vfufBnwSxEuhrZei6H4ZbHuKCd/XnqpvLLMSI="
+	key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="
 	err = client.DoRequestP2P([]byte(key))
 	if err != nil {
 		t.Error(err)
@@ -44,7 +44,7 @@ func TestDoOpenHolePunch2(t *testing.T) {
 		_ = client.Disconnect()
 	}()
 	err := client.Connect()
-	client.addContact("jaeha", "choi", []byte("5P3jG+vfufBnwSxEuhrZei6H4ZbHuKCd/XnqpvLLMSI="), nil)
+	client.addContact("jaeha", "choi", []byte("su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="), nil)
 	if err != nil {
 		t.Error(err)
 	}
