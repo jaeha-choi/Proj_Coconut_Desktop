@@ -427,9 +427,7 @@ func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
 		log.Info("Connection made to: ", client.peerConn.RemoteAddr())
 	} else {
 		log.Error("Unable to establish connection to peer")
-		// TODO uncomment next line
-		//return PeerUnavailableError
-		return nil
+		return common.PeerUnavailableError
 	}
 
 	return err
@@ -440,12 +438,14 @@ func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
 // TODO: WIP
 func (client *Client) doInitP2PConn(wg *sync.WaitGroup, addr string) {
 	defer wg.Done()
+	log.Debug("Attempting to connect to: ", addr)
 	privBuffer := make([]byte, 1024)
 	p2p, err := net.Dial("udp", addr)
 	if err != nil {
 		log.Debug("Unable to connect: ", addr)
 		return
 	}
+	//util.WriteMessage(p2p, nil, nil, common.HolePunchPING)
 	log.Debug("Connection success: ", p2p.RemoteAddr())
 	client.peerConn = p2p
 	// TODO uncomment next line if `common.HolePunchPing.String()` exists

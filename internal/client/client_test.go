@@ -2,6 +2,7 @@ package client
 
 import (
 	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"testing"
 	"time"
 	//"time"
@@ -29,6 +30,7 @@ func TestDoOpenHolePunch(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	log.Info(client.peerConn.RemoteAddr())
 
 }
 
