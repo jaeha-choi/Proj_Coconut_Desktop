@@ -409,11 +409,15 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 // TODO: WIP
 func (client *Client) openHolePunchClient(command *common.Command, addr1 string, addr2 string) (err error) {
 
+	log.Debug("HolePunch Initializing\nDisconnecting From Server")
+	if err := client.Disconnect(); err != nil {
+		return err
+	}
 	log.Info("Local Addr: ", addr1, ", Public Addr: ", addr2)
-
 	// resolve local and remote addresses
 	localAddr, _ := net.ResolveUDPAddr("udp", addr1)
 	remoteAddr, _ := net.ResolveUDPAddr("udp", addr2)
+	// get local address listening to server
 	lAddr, _ := net.ResolveUDPAddr("udp", client.conn.LocalAddr().String())
 	log.Debug("1")
 	// listen to both addresses
@@ -443,26 +447,24 @@ func (client *Client) openHolePunchClient(command *common.Command, addr1 string,
 		client.peerConn = remoteListener
 		_, _ = util.WriteMessage(client.peerConn, []byte("PING REMOTE"), nil, command)
 	}
-
 	log.Debug("5")
-	//wg.Add(1)
-	//go client.doInitP2PConn(&wg, addr1)
-	//
-	//wg.Add(1)
-	//go client.doInitP2PConn(&wg, addr2)
-	//
-	//// wait for goroutines to finish
-	//wg.Wait()
-	//
-	//if client.peerConn != nil {
-	//	log.Info("Connection made to: ", client.peerConn.RemoteAddr())
-	//} else {
-	//	log.Error("Unable to establish connection to peer")
-	//	return common.PeerUnavailableError
-	//}
-
 	return err
 }
+
+//wg.Add(1)
+//go client.doInitP2PConn(&wg, addr1)
+//
+//wg.Add(1)
+//go client.doInitP2PConn(&wg, addr2)
+//
+//// wait for goroutines to finish
+//wg.Wait()
+//
+//if client.peerConn != nil {
+//	log.Info("Connection made to: ", client.peerConn.RemoteAddr())
+//} else {
+//	log.Error("Unable to establish connection to peer")
+//	return common.PeerUnavailableError
 
 //// initP2PConn initialize a connection with the provided.
 //// client.peerConn contains p2p connection if dialing was successful
