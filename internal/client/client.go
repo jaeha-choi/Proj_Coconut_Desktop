@@ -112,7 +112,7 @@ func ReadConfig(fileName string) (client *Client, err error) {
 	}
 
 	client = InitConfig()
-	err = yaml.Unmarshal(file, &client)
+	err = yaml.Unmarshal(file, &client) //
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while parsing config.yml")
@@ -377,12 +377,7 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 		log.Error("Error writing to server")
 		return err
 	}
-	msg, err := util.ReadMessage(client.conn)
-	if msg.CommandCode != common.GetP2PKey.Code || err != nil {
-		return common.UnknownCommandError
-	}
-
-	_, err = util.WriteMessage(client.conn, pkHash, nil, common.GetP2PKey)
+	_, err = util.WriteMessage(client.conn, pkHash, nil, command)
 	if err != nil {
 		return err
 	}
@@ -403,10 +398,10 @@ func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
 	var wg sync.WaitGroup
 
 	wg.Add(1)
-	go client.initP2PConn(&wg, addr1)
+	go client.doInitP2PConn(&wg, addr1)
 
 	wg.Add(1)
-	go client.initP2PConn(&wg, addr2)
+	go client.doInitP2PConn(&wg, addr2)
 
 	// wait for goroutines to finish
 	wg.Wait()
@@ -426,7 +421,7 @@ func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
 // initP2PConn initialize a connection with the provided.
 // client.peerConn contains p2p connection if dialing was successful
 // TODO: WIP
-func (client *Client) initP2PConn(wg *sync.WaitGroup, addr string) {
+func (client *Client) doInitP2PConn(wg *sync.WaitGroup, addr string) {
 	defer wg.Done()
 	privBuffer := make([]byte, 1024)
 	p2p, err := net.Dial("tcp", addr)

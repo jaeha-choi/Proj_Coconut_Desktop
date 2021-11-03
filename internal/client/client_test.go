@@ -3,12 +3,14 @@ package client
 import (
 	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"testing"
 	//"time"
 )
 
 func initClient() Client {
 	client := InitConfig()
+	client.ServerHost = "coconut-demo.jaeha.dev"
 	pubBlock, _ := cryptography.OpenKeysAsBlock(client.KeyPath, "key.pub")
 	privBlock, _ := cryptography.OpenPrivKey(client.KeyPath, "key.priv")
 	client.pubKeyBlock = pubBlock
@@ -37,6 +39,7 @@ func TestDoOpenHolePunch2(t *testing.T) {
 		_ = client.Disconnect()
 	}()
 	err := client.Connect()
+	_, _ = util.ReadMessage(client.conn)
 	err = client.handleRequestP2P()
 	if err != nil {
 		t.Error(err)
