@@ -331,7 +331,7 @@ func (client *Client) handleRequestP2P() (err error) {
 
 	// accept pkhash
 	msg := <-client.chanMap[command.String]
-
+	log.Info("1 ", string(msg.Data))
 	// find relating peer
 	peerStruct, ok := client.contactMap[string(msg.Data)]
 	if !ok {
@@ -339,30 +339,24 @@ func (client *Client) handleRequestP2P() (err error) {
 		return common.ClientNotFoundError
 	}
 	peer := *peerStruct
-	log.Info("Peer: ", peer.PubKeyHash)
+	log.Info("2, Peer: ", peer.PubKeyHash)
 
-	// ask for local ip ("LCIP")
-	_, err = util.WriteMessage(client.conn, []byte("LCIP"), nil, nil)
-	if err != nil {
-		return err
-	}
+	// get peerLocalAddr
 	msg = <-client.chanMap[command.String]
 	if msg.ErrorCode != 0 {
 		return common.ErrorCodes[msg.ErrorCode]
 	}
 	peerLocalAddr := msg.Data
 	log.Info("Peer local address: ", peerLocalAddr)
-	// ask for remote ip ("PBIP")
-	_, err = util.WriteMessage(client.conn, []byte("PBIP"), nil, nil)
-	if err != nil {
-		return err
-	}
+
+	// get peerRemoteAddr
 	msg = <-client.chanMap[command.String]
 	if msg.ErrorCode != 0 {
 		return common.ErrorCodes[msg.ErrorCode]
 	}
 	peerRemoteAddr := msg.Data
 	log.Info("Peer remote address: ", peerRemoteAddr)
+
 	err = client.DoOpenHolePunch(string(peerLocalAddr), string(peerRemoteAddr))
 	return client.getResult(command)
 }
