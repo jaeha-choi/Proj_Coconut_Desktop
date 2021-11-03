@@ -361,7 +361,7 @@ func (client *Client) handleRequestP2P() (err error) {
 	peerRemoteAddr := msg.Data
 
 	time.Sleep(500 * time.Millisecond)
-	err = client.openHolePunchClient(command, string(peerLocalAddr), string(peerRemoteAddr))
+	err = client.openHolePunchClient("C", command, string(peerLocalAddr), string(peerRemoteAddr))
 	return client.getResult(command)
 }
 
@@ -400,54 +400,67 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 	if peerPublicAddr.ErrorCode != 0 {
 		return common.ErrorCodes[peerPublicAddr.ErrorCode]
 	}
-	err = client.openHolePunchClient(command, string(peerLocalAddr.Data), string(peerPublicAddr.Data))
+	err = client.openHolePunchClient("S", command, string(peerLocalAddr.Data), string(peerPublicAddr.Data))
 	return err
 }
 
 // openHolePunchClient Initiates the connection between client and peer
 // returns connection stored in client.peerConn is connection made
 // TODO: WIP
-func (client *Client) openHolePunchClient(command *common.Command, addr1 string, addr2 string) (err error) {
-
+func (client *Client) openHolePunchClient(ClientServer string, command *common.Command, addr1 string, addr2 string) (err error) {
+	lAddrString := client.conn.LocalAddr().String()
 	log.Debug("HolePunch Initializing\nDisconnecting From Server")
 	if err := client.Disconnect(); err != nil {
 		return err
 	}
-	log.Info("Local Addr: ", addr1, ", Public Addr: ", addr2)
+	log.Debug("Local Addr: ", addr1, ", Public Addr: ", addr2)
 	// resolve local and remote addresses
+	lAddr, err := net.ResolveUDPAddr("udp", lAddrString)
+	if err != nil {
+		log.Debug(err)
+	}
 	localAddr, _ := net.ResolveUDPAddr("udp", addr1)
 	remoteAddr, _ := net.ResolveUDPAddr("udp", addr2)
-	// get local address listening to server
-	lAddr, _ := net.ResolveUDPAddr("udp", client.conn.LocalAddr().String())
-	log.Debug("1")
-	// listen to both addresses
-	localListener, err := net.DialUDP("udp", lAddr, localAddr)
-	if err != nil {
-		log.Debug(err)
-	}
-	remoteListener, err := net.DialUDP("udp", lAddr, remoteAddr)
-	if err != nil {
-		log.Debug(err)
-	}
-	log.Debug("2")
-	// write messages to both local and remote
-	_, _ = util.WriteMessage(localListener, []byte("PING LOCAL"), nil, command)
-	_, _ = util.WriteMessage(remoteListener, []byte("PING REMOTE"), nil, command)
-	log.Debug("3")
-	msg := <-client.chanMap[command.String]
+	if ClientServer == "S" {
+		remoteListener, err := net.ListenUDP("udp", remoteAddr)
+		if err != nil {
+			log.Debug(err)
+		}
+		// dial local address
+		localSender, err := net.DialUDP("udp", lAddr, localAddr)
+		if err != nil {
+			log.Debug(err)
+		}
+		//write message to localAddress
+		_, _ = util.WriteMessage(localSender, []byte("PING LOCAL"), nil, command)
+		msg := <-client.chanMap[command.String]
+		if msg.Data == nil {
+			return common.TaskNotCompleteError
+		} else if bytes.Compare(msg.Data, []byte("PING LOCAL")) == 0 {
+			log.Debug("REPLY FROM LOCAL")
+			client.peerConn = remoteListener
+			_, _ = util.WriteMessage(client.peerConn, []byte("PING LOCAL"), nil, command)
+		}
+	} else if ClientServer == "C" {
+		localListener, err := net.ListenUDP("udp", localAddr)
+		if err != nil {
+			return err
+		}
+		remoteSender, err := net.DialUDP("udp", lAddr, remoteAddr)
+		if err != nil {
+			log.Debug(err)
+		}
+		_, _ = util.WriteMessage(remoteSender, []byte("PING REMOTE"), nil, command)
+		msg := <-client.chanMap[command.String]
 
-	if msg.Data == nil {
-		return common.TaskNotCompleteError
-	} else if bytes.Compare(msg.Data, []byte("PING LOCAL")) == 0 {
-		log.Debug("REPLY FROM LOCAL")
-		client.peerConn = localListener
-		_, _ = util.WriteMessage(client.peerConn, []byte("PING LOCAL"), nil, command)
-	} else if bytes.Compare(msg.Data, []byte("PING REMOTE")) == 0 {
-		log.Debug("REPLY FROM REMOTE")
-		client.peerConn = remoteListener
-		_, _ = util.WriteMessage(client.peerConn, []byte("PING REMOTE"), nil, command)
+		if msg.Data == nil {
+			return common.TaskNotCompleteError
+		} else if bytes.Compare(msg.Data, []byte("PING REMOTE")) == 0 {
+			log.Debug("REPLY FROM REMOTE")
+			client.peerConn = localListener
+			_, _ = util.WriteMessage(client.peerConn, []byte("PING REMOTE"), nil, command)
+		}
 	}
-	log.Debug("5")
 	return err
 }
 
