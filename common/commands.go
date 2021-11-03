@@ -16,7 +16,6 @@ var CommandCodes = [256]*Command{
 	RequestRelay,
 	GetP2PKey,
 	RequestP2P,
-	GetLocalIP,
 	HolePunchPING,
 	HolePunchPONG,
 	File,
@@ -67,26 +66,20 @@ var RequestP2P = &Command{
 	Code:   9,
 }
 
-// GetLocalIP retrieve local ip of client
-var GetLocalIP = &Command{
-	String: "GLIP",
-	Code:   10,
-}
-
 // HolePunchPING init command for p2p connection
 var HolePunchPING = &Command{
 	String: "PING",
-	Code:   11,
+	Code:   10,
 }
 
 // HolePunchPONG init reply to "PING" command
 var HolePunchPONG = &Command{
 	String: "PONG",
-	Code:   12,
+	Code:   11,
 }
 
 // File command is used when exchanging encrypted files
 var File = &Command{
 	String: "FILE",
-	Code:   13,
+	Code:   12,
 }
