@@ -20,7 +20,7 @@ func TestEncryptDecrypt(t *testing.T) {
 	}()
 	testFileN := "../testdata/checksum.txt"
 
-	privKey, err := OpenPrivKey("../testdata/keypair1/", "key.priv")
+	privKey, err := OpenPrivKey("../testdata/keypairCat/", "cat.priv")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenPrivKey")
@@ -121,7 +121,7 @@ func TestEncryptDecrypt2(t *testing.T) {
 	}()
 
 	// Client 1
-	privKey1, err := OpenPrivKey("../testdata/keypair1/", "key.priv")
+	privKey1, err := OpenPrivKey("../testdata/keypairCat/", "cat.priv")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenPrivKey")
@@ -129,7 +129,7 @@ func TestEncryptDecrypt2(t *testing.T) {
 	}
 
 	// Client 2
-	privKey2, err := OpenPrivKey("../testdata/keypair2/", "key.priv")
+	privKey2, err := OpenPrivKey("../testdata/keypairFox/", "fox.priv")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenPrivKey")

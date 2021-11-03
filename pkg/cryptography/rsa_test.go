@@ -36,13 +36,13 @@ func TestCreateRSAKey(t *testing.T) {
 }
 
 func TestOpenKeys(t *testing.T) {
-	pem, err := OpenKeysAsBlock("../testdata/keypair1/", "key.pub")
+	pem, err := OpenKeysAsBlock("../testdata/keypairCat/", "cat.pub")
 	if pem == nil || err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeysAsBlock")
 		return
 	}
-	pem, err = OpenKeysAsBlock("../testdata/keypair1/", "key.priv")
+	pem, err = OpenKeysAsBlock("../testdata/keypairCat/", "cat.priv")
 	if pem == nil || err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeysAsBlock")
@@ -51,7 +51,7 @@ func TestOpenKeys(t *testing.T) {
 }
 
 func TestPemToSha256(t *testing.T) {
-	pem, err := OpenKeysAsBlock("../testdata/keypair1/", "key.pub")
+	pem, err := OpenKeysAsBlock("../testdata/keypairCat/", "cat.pub")
 	if pem == nil || err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenKeysAsBlock")
@@ -78,7 +78,7 @@ func TestBytesToBase64(t *testing.T) {
 
 func TestKeyEncryptSignAESKey(t *testing.T) {
 	// Open Key
-	privKey, err := OpenPrivKey("../testdata/keypair1/", "key.priv")
+	privKey, err := OpenPrivKey("../testdata/keypairCat/", "cat.priv")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenPrivKey")
@@ -105,18 +105,18 @@ func TestKeyEncryptSignAESKey(t *testing.T) {
 
 func TestKeyEncryptDecryptAESKey(t *testing.T) {
 
-	// Client 1
+	// Client Cat
 	// Open Key
-	privKey1, err := OpenPrivKey("../testdata/keypair1/", "key.priv")
+	privKey1, err := OpenPrivKey("../testdata/keypairCat/", "cat.priv")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenPrivKey")
 		return
 	}
 
-	// Client 3
+	// Client Fox
 	// Open Key
-	privKey3, err := OpenPrivKey("../testdata/keypair3/", "key.priv")
+	privKey3, err := OpenPrivKey("../testdata/keypairFox/", "Fox.priv")
 	if err != nil {
 		log.Debug(err)
 		t.Error("Error in OpenPrivKey")
