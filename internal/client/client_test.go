@@ -1,8 +1,10 @@
 package client
 
 import (
+	"github.com/jaeha-choi/Proj_Coconut_Utility/common"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"testing"
 	"time"
 	//"time"
@@ -31,6 +33,8 @@ func TestDoOpenHolePunch(t *testing.T) {
 		t.Error(err)
 	}
 	log.Info(client.peerConn.RemoteAddr())
+	time.Sleep(2 * time.Second)
+	_, _ = util.WriteMessage(client.peerConn, nil, nil, common.RequestP2P)
 
 }
 
@@ -45,6 +49,8 @@ func TestDoOpenHolePunch2(t *testing.T) {
 		t.Error(err)
 	}
 	time.Sleep(1 * time.Minute)
+	msg, _ := util.ReadMessage(client.peerConn)
+	log.Debug(string(msg.Data))
 }
 
 //func TestConnect(t *testing.T) {

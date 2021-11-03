@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"crypto/tls"
 	"encoding/gob"
@@ -16,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"time"
 )
 
@@ -360,7 +360,8 @@ func (client *Client) handleRequestP2P() (err error) {
 	}
 	peerRemoteAddr := msg.Data
 
-	err = client.DoOpenHolePunch(string(peerLocalAddr), string(peerRemoteAddr))
+	time.Sleep(500 * time.Millisecond)
+	err = client.openHolePunchClient(command, string(peerLocalAddr), string(peerRemoteAddr))
 	return client.getResult(command)
 }
 
@@ -369,6 +370,7 @@ func (client *Client) handleRequestP2P() (err error) {
 func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 	var command = common.RequestP2P
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
 
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		log.Error("Error writing to server")
@@ -398,64 +400,86 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 	if peerPublicAddr.ErrorCode != 0 {
 		return common.ErrorCodes[peerPublicAddr.ErrorCode]
 	}
-	err = client.DoOpenHolePunch(string(peerLocalAddr.Data), string(peerPublicAddr.Data))
+	err = client.openHolePunchClient(command, string(peerLocalAddr.Data), string(peerPublicAddr.Data))
 	return err
 }
 
-// DoOpenHolePunch Initiates the connection between client and peer
+// openHolePunchClient Initiates the connection between client and peer
 // returns connection stored in client.peerConn is connection made
 // TODO: WIP
-func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
+func (client *Client) openHolePunchClient(command *common.Command, addr1 string, addr2 string) (err error) {
+
 	log.Info("Local Addr: ", addr1, ", Public Addr: ", addr2)
 
-	// create WaitGroup to halt processes until
-	// both initPrivateAddr and initRemoteAddr complete
-	var wg sync.WaitGroup
-	go net.Listen("udp", addr1)
-	go net.Listen("udp", addr2)
+	// resolve local and remote addresses
+	localAddr, _ := net.ResolveUDPAddr("udp", addr1)
+	remoteAddr, _ := net.ResolveUDPAddr("udp", addr2)
+	log.Debug("1")
+	// listen to both addresses
+	localListener, err := net.ListenUDP("udp", localAddr)
+	remoteListener, err := net.ListenUDP("udp", remoteAddr)
+	log.Debug("2")
+	// write messages to both local and remote
+	_, _ = util.WriteMessage(localListener, []byte("PING LOCAL"), nil, command)
+	_, _ = util.WriteMessage(remoteListener, []byte("PING REMOTE"), nil, command)
+	log.Debug("3")
+	msg := <-client.chanMap[command.String]
 
-	wg.Add(1)
-	go client.doInitP2PConn(&wg, addr1)
-
-	wg.Add(1)
-	go client.doInitP2PConn(&wg, addr2)
-
-	// wait for goroutines to finish
-	wg.Wait()
-
-	if client.peerConn != nil {
-		log.Info("Connection made to: ", client.peerConn.RemoteAddr())
-	} else {
-		log.Error("Unable to establish connection to peer")
-		return common.PeerUnavailableError
+	if msg.Data == nil {
+		return common.TaskNotCompleteError
+	} else if bytes.Compare(msg.Data, []byte("PING LOCAL")) == 0 {
+		log.Debug("REPLY FROM LOCAL")
+		client.peerConn = localListener
+		_, _ = util.WriteMessage(client.peerConn, []byte("PING LOCAL"), nil, command)
+	} else if bytes.Compare(msg.Data, []byte("PING REMOTE")) == 0 {
+		log.Debug("REPLY FROM REMOTE")
+		client.peerConn = remoteListener
+		_, _ = util.WriteMessage(client.peerConn, []byte("PING REMOTE"), nil, command)
 	}
+
+	log.Debug("5")
+	//wg.Add(1)
+	//go client.doInitP2PConn(&wg, addr1)
+	//
+	//wg.Add(1)
+	//go client.doInitP2PConn(&wg, addr2)
+	//
+	//// wait for goroutines to finish
+	//wg.Wait()
+	//
+	//if client.peerConn != nil {
+	//	log.Info("Connection made to: ", client.peerConn.RemoteAddr())
+	//} else {
+	//	log.Error("Unable to establish connection to peer")
+	//	return common.PeerUnavailableError
+	//}
 
 	return err
 }
 
-// initP2PConn initialize a connection with the provided.
-// client.peerConn contains p2p connection if dialing was successful
-// TODO: WIP
-func (client *Client) doInitP2PConn(wg *sync.WaitGroup, addr string) {
-	defer wg.Done()
-	log.Debug("Attempting to connect to: ", addr)
-	privBuffer := make([]byte, 1024)
-	p2p, err := net.Dial("udp", addr)
-	if err != nil {
-		log.Debug("Unable to connect: ", addr)
-		return
-	}
-	//util.WriteMessage(p2p, nil, nil, common.HolePunchPING)
-	log.Debug("Connection success: ", p2p.RemoteAddr())
-	client.peerConn = p2p
-	// TODO uncomment next line if `common.HolePunchPing.String()` exists
-	//	_, _ = p2p.Write([]byte(common.HolePunchPing.String()))
-	_, _ = p2p.Write([]byte("PING"))
-	_, _ = p2p.Read(privBuffer)
-	//i, _ := p2p.Read(privBuffer)
-	//log.Debug(string(privBuffer[:i]))
-
-}
+//// initP2PConn initialize a connection with the provided.
+//// client.peerConn contains p2p connection if dialing was successful
+//// TODO: WIP
+//func (client *Client) doInitP2PConn(wg *sync.WaitGroup, addr string) {
+//	defer wg.Done()
+//	log.Debug("Attempting to connect to: ", addr)
+//	privBuffer := make([]byte, 1024)
+//	p2p, err := net.Dial("udp", addr)
+//	if err != nil {
+//		log.Debug("Unable to connect: ", addr)
+//		return
+//	}
+//	//util.WriteMessage(p2p, nil, nil, common.HolePunchPING)
+//	log.Debug("Connection success: ", p2p.RemoteAddr())
+//	client.peerConn = p2p
+//	// TODO uncomment next line if `common.HolePunchPing.String()` exists
+//	//	_, _ = p2p.Write([]byte(common.HolePunchPing.String()))
+//	_, _ = p2p.Write([]byte("PING"))
+//	_, _ = p2p.Read(privBuffer)
+//	//i, _ := p2p.Read(privBuffer)
+//	//log.Debug(string(privBuffer[:i]))
+//
+//}
 
 // ReadContactsFile read the contents of contacts.gob into client.contactMap
 func (client *Client) ReadContactsFile() (err error) {
