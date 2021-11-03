@@ -2,8 +2,8 @@ package client
 
 import (
 	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
-	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"testing"
+	"time"
 	//"time"
 )
 
@@ -38,10 +38,11 @@ func TestDoOpenHolePunch2(t *testing.T) {
 		_ = client.Disconnect()
 	}()
 	err := client.Connect()
+	client.addContact("jaeha", "choi", []byte("5P3jG+vfufBnwSxEuhrZei6H4ZbHuKCd/XnqpvLLMSI="), nil)
 	if err != nil {
 		t.Error(err)
 	}
-	log.Info("breakpoint here")
+	time.Sleep(1 * time.Minute)
 }
 
 //func TestConnect(t *testing.T) {

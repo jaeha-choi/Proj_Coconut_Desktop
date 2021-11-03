@@ -147,7 +147,8 @@ func (client *Client) commandHandler() {
 		} else if command == common.GetPubKey {
 			err = client.handleGetPubKey()
 		} else if command == common.RequestP2P {
-			err = client.handleRequestP2P()
+			go client.handleRequestP2P()
+		} else {
 		}
 	}
 }
@@ -330,18 +331,20 @@ func (client *Client) handleRequestP2P() (err error) {
 	var command = common.RequestP2P
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
-
 	// accept pkhash
 	msg := <-client.chanMap[command.String]
-	log.Info("1 ", string(msg.Data))
 	// find relating peer
-	peerStruct, ok := client.contactMap[string(msg.Data)]
+	// TODO change "_" to "peerStruct" to retrieve pointer to structure
+	_, ok := client.contactMap[string(msg.Data)]
 	if !ok {
-		_, _ = util.WriteMessage(client.conn, nil, common.ClientNotFoundError, nil)
+		//err := common.ClientNotFoundError
+		//_, _ = util.WriteMessage(client.conn, nil, err, nil)
 		return common.ClientNotFoundError
 	}
-	peer := *peerStruct
-	log.Info("2, Peer: ", peer.PubKeyHash)
+
+	// Peer below allows access to full peer client structure
+	// Possibly will be needed within ui
+	//peer := *peerStruct
 
 	// get peerLocalAddr
 	msg = <-client.chanMap[command.String]
@@ -349,7 +352,6 @@ func (client *Client) handleRequestP2P() (err error) {
 		return common.ErrorCodes[msg.ErrorCode]
 	}
 	peerLocalAddr := msg.Data
-	log.Info("Peer local address: ", peerLocalAddr)
 
 	// get peerRemoteAddr
 	msg = <-client.chanMap[command.String]
@@ -357,7 +359,6 @@ func (client *Client) handleRequestP2P() (err error) {
 		return common.ErrorCodes[msg.ErrorCode]
 	}
 	peerRemoteAddr := msg.Data
-	log.Info("Peer remote address: ", peerRemoteAddr)
 
 	err = client.DoOpenHolePunch(string(peerLocalAddr), string(peerRemoteAddr))
 	return client.getResult(command)
@@ -373,36 +374,30 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 		log.Error("Error writing to server")
 		return err
 	}
-	log.Info("1")
 	//Read error code for finding tx client
 	msg := <-client.chanMap[command.String]
 	if msg.ErrorCode != 0 {
 		return common.ErrorCodes[msg.ErrorCode]
 	}
-	log.Info("2")
 
 	_, err = util.WriteMessage(client.conn, pkHash, nil, command)
 	if err != nil {
 		return err
 	}
-	log.Info("3")
 
 	// Read error code for finding rx client
 	if msg := <-client.chanMap[command.String]; msg.ErrorCode != 0 {
 		return common.ErrorCodes[msg.ErrorCode]
 	}
-	log.Info("4")
 
 	peerLocalAddr := <-client.chanMap[command.String]
 	if peerLocalAddr.ErrorCode != 0 {
 		return common.ErrorCodes[peerLocalAddr.ErrorCode]
 	}
-	log.Info("5", string(peerLocalAddr.Data))
 	peerPublicAddr := <-client.chanMap[command.String]
 	if peerPublicAddr.ErrorCode != 0 {
 		return common.ErrorCodes[peerPublicAddr.ErrorCode]
 	}
-	log.Info("6", string(peerPublicAddr.Data))
 	err = client.DoOpenHolePunch(string(peerLocalAddr.Data), string(peerPublicAddr.Data))
 	return err
 }
@@ -416,6 +411,8 @@ func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
 	// create WaitGroup to halt processes until
 	// both initPrivateAddr and initRemoteAddr complete
 	var wg sync.WaitGroup
+	go net.Listen("udp", addr1)
+	go net.Listen("udp", addr2)
 
 	wg.Add(1)
 	go client.doInitP2PConn(&wg, addr1)
@@ -444,7 +441,7 @@ func (client *Client) DoOpenHolePunch(addr1 string, addr2 string) (err error) {
 func (client *Client) doInitP2PConn(wg *sync.WaitGroup, addr string) {
 	defer wg.Done()
 	privBuffer := make([]byte, 1024)
-	p2p, err := net.Dial("tcp", addr)
+	p2p, err := net.Dial("udp", addr)
 	if err != nil {
 		log.Debug("Unable to connect: ", addr)
 		return
