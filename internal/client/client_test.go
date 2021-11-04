@@ -10,13 +10,11 @@ import (
 	//"time"
 )
 
-func initClient() Client {
+func initClient(keyN string) Client {
 	client := InitConfig()
-	client, _ = ReadConfig("../../config/config.yml")
-	log.Debug("Server IP: ", client.ServerHost)
 	client.ServerHost = "coconut-demo.jaeha.dev"
-	pubBlock, _ := cryptography.OpenKeysAsBlock(client.KeyPath, "key.pub")
-	privBlock, _ := cryptography.OpenPrivKey(client.KeyPath, "key.priv")
+	pubBlock, _ := cryptography.OpenKeysAsBlock(client.KeyPath, keyN+".pub")
+	privBlock, _ := cryptography.OpenPrivKey(client.KeyPath, keyN+".priv")
 	client.pubKeyBlock = pubBlock
 	client.privKey = privBlock
 	return *client
@@ -24,14 +22,14 @@ func initClient() Client {
 
 func TestDoOpenHolePunch(t *testing.T) {
 	// *P2P SERVER*
-	client := initClient()
+	client := initClient("key")
 	defer func() {
 		_ = client.Disconnect()
 	}()
 	err := client.Connect()
 	var key string
-	//key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
-	key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
+	key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
+	//key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
 	//key = "GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
 	err = client.DoRequestP2P([]byte(key))
 	if err != nil {
@@ -39,13 +37,13 @@ func TestDoOpenHolePunch(t *testing.T) {
 	}
 	log.Info(client.peerConn.RemoteAddr())
 	time.Sleep(2 * time.Second)
-	_, _ = util.WriteMessage(client.peerConn, nil, nil, common.File)
+	_, _ = util.WriteMessage(client.peerConn, nil, nil, common.RequestP2P)
 
 }
 
 func TestDoOpenHolePunch2(t *testing.T) {
 	// *P2P CLIENT*
-	client := initClient()
+	client := initClient("key")
 	defer func() {
 		_ = client.Disconnect()
 	}()
@@ -61,7 +59,52 @@ func TestDoOpenHolePunch2(t *testing.T) {
 	log.Debug(string(msg.Data))
 }
 
-func TestClient_DoGetAddCode(t *testing.T) {
+func TestDoOpenHolePunchLocalHost(t *testing.T) {
+	go func() {
+		// *P2P CLIENT*
+		client1 := initClient("keyDun")
+		defer func() {
+			_ = client1.Disconnect()
+		}()
+		client1.ServerHost = "localhost"
+		err := client1.Connect()
+		client1.addContact("jaeha", "choi", []byte("su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="), nil)
+		client1.addContact("robin", "seo", []byte("giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598="), nil)
+		client1.addContact("duncan", "spani", []byte("GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), nil)
+		if err != nil {
+			t.Error(err)
+		}
+		time.Sleep(1 * time.Minute)
+		//msg, _ := util.ReadMessage(client.peerConn)
+		//log.Debug(string(msg.Data))
+	}()
+
+	time.Sleep(1 * time.Second)
+
+	go func() {
+		// *P2P SERVER*
+		client2 := initClient("key")
+		defer func() {
+			_ = client2.Disconnect()
+		}()
+		client2.ServerHost = "localhost"
+		err := client2.Connect()
+		var key string
+		//key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
+		//key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
+		key = "GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
+		err = client2.DoRequestP2P([]byte(key))
+		if err != nil {
+			t.Error(err)
+		}
+		//log.Info(client.peerConn.RemoteAddr())
+		//time.Sleep(2 * time.Second)
+		//_, _ = util.WriteMessage(client.peerConn, nil, nil, common.RequestP2P)
+		time.Sleep(1 * time.Minute)
+
+	}()
+
+	time.Sleep(2 * time.Minute)
 
 }
 

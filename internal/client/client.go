@@ -83,7 +83,6 @@ type Contact struct {
 // InitConfig initializes a default Client struct.
 func InitConfig() (client *Client) {
 	client = &Client{
-		// TODO: for some reason server host is not being set to value in config.yml
 		ServerHost:  "127.0.0.1", // TODO: update this value after deploying the relay server
 		ServerPort:  defaultServerPort,
 		LocalPort:   defaultLocalPort,
@@ -111,7 +110,7 @@ func ReadConfig(fileName string) (client *Client, err error) {
 	}
 
 	client = InitConfig()
-	err = yaml.Unmarshal(file, &client) //
+	err = yaml.Unmarshal(file, &client)
 	if err != nil {
 		log.Debug(err)
 		log.Error("Error while parsing config.yml")
@@ -141,15 +140,19 @@ func (client *Client) commandHandler() {
 			break
 		}
 		command := common.CommandCodes[msg.CommandCode]
+		// TODO: Error handling
 		if c, ok := client.chanMap[command.String]; ok {
 			c <- msg
 		} else if command == common.GetPubKey {
-			err = client.handleGetPubKey()
+			go func() {
+				err = client.handleGetPubKey()
+			}()
 		} else if command == common.RequestP2P {
-			go client.handleRequestP2P()
-		} else if command == common.File {
-			log.Debug(string(msg.Data))
+			go func() {
+				err = client.handleRequestP2P()
+			}()
 		} else {
+			err = common.UnknownCommandError
 		}
 	}
 }
@@ -162,7 +165,11 @@ func (client *Client) Connect() (err error) {
 		return common.ExistingConnError
 	}
 	log.Debug("Connecting...")
+	// TODO: Double check if resolving is necessary
 	resolvedHost, err := net.ResolveIPAddr("ip", client.ServerHost)
+	if err != nil {
+		return err
+	}
 	client.ServerHost = resolvedHost.String()
 	client.conn, err = tls.Dial("tcp", client.ServerHost+":"+strconv.Itoa(int(client.ServerPort)), client.tlsConfig)
 	if err != nil {
@@ -329,75 +336,112 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 }
 
 func (client *Client) handleRequestP2P() (err error) {
-	var command = common.RequestP2P
+	// Init
+	var command = common.RequestP2P // TODO: Update to HandleRequestP2P
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
-	// accept pkhash
+
+	// TODO: Fix rx -> server write msg issue
+	//// 1b. Notify server that the rx is ready
+	//if _, err := util.WriteMessage(client.conn, nil, nil, command); err != nil {
+	//	return err
+	//}
+
+	// 2b. Receive tx public key hash from the server
 	msg := <-client.chanMap[command.String]
-	// find relating peer
+	// Find tx using tx public key hash
 	// TODO change "_" to "peerStruct" to retrieve pointer to structure
 	_, ok := client.contactMap[string(msg.Data)]
+
+	// 3b. Notify server that tx is found/not found
 	if !ok {
-		//err := common.ClientNotFoundError
-		//_, _ = util.WriteMessage(client.conn, nil, err, nil)
 		return common.ClientNotFoundError
 	}
+	// TODO: Fix rx -> server write msg issue
+	//if _, err := util.WriteMessage(client.conn, nil, nil, command); err != nil {
+	//	log.Debug("2 ", err)
+	//	return err
+	//}
 
 	// Peer below allows access to full peer client structure
 	// Possibly will be needed within ui
 	//peer := *peerStruct
 
-	// get peerRemoteAddr
+	// 4b. Receive tx localIP:localPort
 	msg = <-client.chanMap[command.String]
-	if msg.ErrorCode != 0 {
-		return common.ErrorCodes[msg.ErrorCode]
-	}
+	peerLocalAddr := msg.Data
+
+	// 5b. Receive tx publicIP:publicPort
+	msg = <-client.chanMap[command.String]
 	peerRemoteAddr := msg.Data
 
-	time.Sleep(500 * time.Millisecond)
-	err = client.openHolePunch(command, string(peerRemoteAddr))
-	return client.getResult(command)
+	//// 6. Get result
+	//if err = client.getResult(command); err != nil {
+	//	return err
+	//}
+
+	//time.Sleep(500 * time.Millisecond)
+
+	// Init hole punch
+	return client.openHolePunchClient(command, string(peerLocalAddr), string(peerRemoteAddr))
 }
 
 // DoRequestP2P signals the relay server that a client wants to connect to another client
 // TODO: WIP
 func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
+	// Init
 	var command = common.RequestP2P
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
-	// write init p2p header to server
+
+	// 0. Write command
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		log.Error("Error writing to server")
 		return err
 	}
-	//Read error code for finding tx client
+
+	// 1a. Read error code for finding tx client
 	msg := <-client.chanMap[command.String]
 	if msg.ErrorCode != 0 {
 		return common.ErrorCodes[msg.ErrorCode]
 	}
 
+	// 2a. Write rx public key hash
 	_, err = util.WriteMessage(client.conn, pkHash, nil, command)
 	if err != nil {
 		return err
 	}
 
-	// Read error code for finding rx client
+	// 3a. Read error code for finding rx client
 	if msg := <-client.chanMap[command.String]; msg.ErrorCode != 0 {
 		return common.ErrorCodes[msg.ErrorCode]
 	}
 
+	// 4a. Receive rx localIP:localPort to tx
+	peerLocalAddr := <-client.chanMap[command.String]
+	if peerLocalAddr.ErrorCode != 0 {
+		return common.ErrorCodes[peerLocalAddr.ErrorCode]
+	}
+
+	// 5a. Receive rx publicIP:publicPort to tx
 	peerPublicAddr := <-client.chanMap[command.String]
 	if peerPublicAddr.ErrorCode != 0 {
 		return common.ErrorCodes[peerPublicAddr.ErrorCode]
 	}
-	err = client.openHolePunch(command, string(peerPublicAddr.Data))
-	return err
+
+	//// 6. Get result
+	//if err = client.getResult(command); err != nil {
+	//	return err
+	//}
+
+	// Init hole punch
+	return client.openHolePunchClient(command, string(peerLocalAddr.Data), string(peerPublicAddr.Data))
 }
 
-// openHolePunch Initiates the connection between client and peer
+// openHolePunchClient Initiates the connection between client and peer
 // returns connection stored in client.peerConn is connection made
 // TODO: WIP
-func (client *Client) openHolePunch(command *common.Command, peerAddr string) (err error) {
+func (client *Client) openHolePunchClient(command *common.Command, peerLAddr string, peerAddr string) (err error) {
 	lAddrString := client.conn.LocalAddr().String()
 
 	// Disconnect from relay server
@@ -406,7 +450,7 @@ func (client *Client) openHolePunch(command *common.Command, peerAddr string) (e
 		return err
 	}
 
-	log.Debug("Peer public Addr: ", peerAddr)
+	log.Debug("Peer local Addr: ", peerLAddr, ", Peer public Addr: ", peerAddr)
 
 	// Resolve local and remote addresses
 	lAddr, err := net.ResolveUDPAddr("udp", lAddrString)
@@ -436,69 +480,19 @@ func (client *Client) openHolePunch(command *common.Command, peerAddr string) (e
 				log.Debug(err)
 			}
 			log.Debug("Read: ", string(buffer))
-			client.peerConn = conn
 		}
 	}()
 
 	// Writing
-	_, err = conn.WriteTo([]byte("Hello"), addr)
-	if err != nil {
-		log.Debug(err)
-		return err
+	for {
+		_, err := conn.WriteTo([]byte("Hello"), addr)
+		if err != nil {
+			log.Debug(err)
+			return err
+		}
+		time.Sleep(5 * time.Second)
 	}
-	return err
 }
-
-//if ClientServer == "S" {
-//	log.Debug("Server")
-//	_, _ = <-client.chanMap[command.String] // accept nil packet from disconnect
-//	remoteListener, err := net.ListenUDP("udp", nil)
-//	_, _ = util.WriteMessage(remoteListener, []byte("PING REMOTE"), nil, command)
-//	log.Debug("listening on ", remoteListener.LocalAddr())
-//	if err != nil {
-//		log.Debug(err)
-//	}
-//	//err = client.getResult(command)
-//	// dial local address
-//	localSender, err := net.DialUDP("udp", lAddr, localAddr)
-//	log.Debug("dialing", localSender.RemoteAddr())
-//	if err != nil {
-//		log.Debug(err)
-//	}
-//	//write message to localAddress
-//	_, _ = util.WriteMessage(localSender, []byte("PING LOCAL"), nil, command)
-//	log.Debug("wrote message")
-//	msg := <-client.chanMap[command.String]
-//	log.Debug(msg.Data, msg.ErrorCode, msg.CommandCode)
-//	if msg.Data == nil {
-//		return common.TaskNotCompleteError
-//	} else if bytes.Compare(msg.Data, []byte("PING LOCAL")) == 0 {
-//		log.Debug("REPLY FROM LOCAL")
-//		client.peerConn = remoteListener
-//		_, _ = util.WriteMessage(client.peerConn, []byte("PING LOCAL"), nil, command)
-//	}
-//} else if ClientServer == "C" {
-//	localListener, err := net.ListenUDP("udp", nil)
-//	_, _ = util.WriteMessage(localListener, []byte("PING LOCAL"), nil, command)
-//	if err != nil {
-//		return err
-//	}
-//	remoteSender, err := net.DialUDP("udp", lAddr, remoteAddr)
-//	if err != nil {
-//		log.Debug(err)
-//		return err
-//	}
-//	_, _ = util.WriteMessage(remoteSender, []byte("PING REMOTE"), nil, command)
-//	msg := <-client.chanMap[command.String]
-//	log.Debug(msg.Data, msg.ErrorCode, msg.CommandCode)
-//	if msg.Data == nil {
-//		return common.TaskNotCompleteError
-//	} else if bytes.Compare(msg.Data, []byte("PING REMOTE")) == 0 {
-//		log.Debug("REPLY FROM REMOTE")
-//		client.peerConn = localListener
-//		_, _ = util.WriteMessage(client.peerConn, []byte("PING REMOTE"), nil, command)
-//	}
-//}
 
 //wg.Add(1)
 //go client.doInitP2PConn(&wg, addr1)
