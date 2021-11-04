@@ -21,13 +21,16 @@ func initClient() Client {
 }
 
 func TestDoOpenHolePunch(t *testing.T) {
+	// *P2P SERVER*
 	client := initClient()
 	defer func() {
 		_ = client.Disconnect()
 	}()
 	err := client.Connect()
 	var key string
-	key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="
+	key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
+	//key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
+	//key = "GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
 	err = client.DoRequestP2P([]byte(key))
 	if err != nil {
 		t.Error(err)
@@ -39,12 +42,15 @@ func TestDoOpenHolePunch(t *testing.T) {
 }
 
 func TestDoOpenHolePunch2(t *testing.T) {
+	// *P2P CLIENT*
 	client := initClient()
 	defer func() {
 		_ = client.Disconnect()
 	}()
 	err := client.Connect()
-	client.addContact("jaeha", "choi", []byte("giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598="), nil)
+	client.addContact("jaeha", "choi", []byte("su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="), nil)
+	client.addContact("robin", "seo", []byte("giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598="), nil)
+	client.addContact("duncan", "spani", []byte("GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), nil)
 	if err != nil {
 		t.Error(err)
 	}

@@ -419,20 +419,27 @@ func (client *Client) openHolePunchClient(ClientServer string, command *common.C
 	if err != nil {
 		log.Debug(err)
 	}
+	log.Debug(lAddr)
 	localAddr, _ := net.ResolveUDPAddr("udp", addr1)
 	remoteAddr, _ := net.ResolveUDPAddr("udp", addr2)
 	if ClientServer == "S" {
+		log.Debug("Server")
+		_, _ = <-client.chanMap[command.String] // accept nil packet from disconnect
 		remoteListener, err := net.ListenUDP("udp", nil)
+		log.Debug("listening on ", remoteListener.LocalAddr())
 		if err != nil {
 			log.Debug(err)
 		}
+		//err = client.getResult(command)
 		// dial local address
 		localSender, err := net.DialUDP("udp", lAddr, localAddr)
+		log.Debug("dialing", localSender.RemoteAddr())
 		if err != nil {
 			log.Debug(err)
 		}
 		//write message to localAddress
 		_, _ = util.WriteMessage(localSender, []byte("PING LOCAL"), nil, command)
+		log.Debug("wrote message")
 		msg := <-client.chanMap[command.String]
 		log.Debug(msg.Data, msg.ErrorCode, msg.CommandCode)
 		if msg.Data == nil {
@@ -450,6 +457,7 @@ func (client *Client) openHolePunchClient(ClientServer string, command *common.C
 		remoteSender, err := net.DialUDP("udp", lAddr, remoteAddr)
 		if err != nil {
 			log.Debug(err)
+			return err
 		}
 		_, _ = util.WriteMessage(remoteSender, []byte("PING REMOTE"), nil, command)
 		msg := <-client.chanMap[command.String]
