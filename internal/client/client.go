@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"crypto/rsa"
 	"crypto/tls"
 	"encoding/gob"
@@ -424,52 +423,78 @@ func (client *Client) openHolePunchClient(ClientServer string, command *common.C
 	remoteAddr, _ := net.ResolveUDPAddr("udp", addr2)
 	if ClientServer == "S" {
 		log.Debug("Server")
-		_, _ = <-client.chanMap[command.String] // accept nil packet from disconnect
-		remoteListener, err := net.ListenUDP("udp", nil)
-		log.Debug("listening on ", remoteListener.LocalAddr())
-		if err != nil {
-			log.Debug(err)
-		}
-		//err = client.getResult(command)
-		// dial local address
-		localSender, err := net.DialUDP("udp", lAddr, localAddr)
-		log.Debug("dialing", localSender.RemoteAddr())
-		if err != nil {
-			log.Debug(err)
-		}
-		//write message to localAddress
-		_, _ = util.WriteMessage(localSender, []byte("PING LOCAL"), nil, command)
-		log.Debug("wrote message")
-		msg := <-client.chanMap[command.String]
-		log.Debug(msg.Data, msg.ErrorCode, msg.CommandCode)
-		if msg.Data == nil {
-			return common.TaskNotCompleteError
-		} else if bytes.Compare(msg.Data, []byte("PING LOCAL")) == 0 {
-			log.Debug("REPLY FROM LOCAL")
-			client.peerConn = remoteListener
-			_, _ = util.WriteMessage(client.peerConn, []byte("PING LOCAL"), nil, command)
+		conn, _ := net.ListenUDP("udp", lAddr)
+		conn.WriteTo([]byte("L PONG"), localAddr)
+		conn.WriteTo([]byte("R PONG"), remoteAddr)
+		for {
+			msg := <-client.chanMap[command.String]
+			log.Debug(msg.Data, msg.CommandCode)
 		}
 	} else if ClientServer == "C" {
-		localListener, err := net.ListenUDP("udp", nil)
-		if err != nil {
-			return err
-		}
-		remoteSender, err := net.DialUDP("udp", lAddr, remoteAddr)
-		if err != nil {
-			log.Debug(err)
-			return err
-		}
-		_, _ = util.WriteMessage(remoteSender, []byte("PING REMOTE"), nil, command)
-		msg := <-client.chanMap[command.String]
-		log.Debug(msg.Data, msg.ErrorCode, msg.CommandCode)
-		if msg.Data == nil {
-			return common.TaskNotCompleteError
-		} else if bytes.Compare(msg.Data, []byte("PING REMOTE")) == 0 {
-			log.Debug("REPLY FROM REMOTE")
-			client.peerConn = localListener
-			_, _ = util.WriteMessage(client.peerConn, []byte("PING REMOTE"), nil, command)
+		log.Debug("Client")
+		conn, _ := net.ListenUDP("udp", lAddr)
+		conn.WriteTo([]byte("L PONG"), localAddr)
+		conn.WriteTo([]byte("R PONG"), remoteAddr)
+		for {
+			buffer := make([]byte, 1024)
+			bytesRead, err := conn.Read(buffer) // read any message into buffer
+			if err != nil {
+				continue
+			}
+			log.Debug("[INCOMING]", string(buffer[0:bytesRead]))
 		}
 	}
+
+	//if ClientServer == "S" {
+	//	log.Debug("Server")
+	//	_, _ = <-client.chanMap[command.String] // accept nil packet from disconnect
+	//	remoteListener, err := net.ListenUDP("udp", nil)
+	//	_, _ = util.WriteMessage(remoteListener, []byte("PING REMOTE"), nil, command)
+	//	log.Debug("listening on ", remoteListener.LocalAddr())
+	//	if err != nil {
+	//		log.Debug(err)
+	//	}
+	//	//err = client.getResult(command)
+	//	// dial local address
+	//	localSender, err := net.DialUDP("udp", lAddr, localAddr)
+	//	log.Debug("dialing", localSender.RemoteAddr())
+	//	if err != nil {
+	//		log.Debug(err)
+	//	}
+	//	//write message to localAddress
+	//	_, _ = util.WriteMessage(localSender, []byte("PING LOCAL"), nil, command)
+	//	log.Debug("wrote message")
+	//	msg := <-client.chanMap[command.String]
+	//	log.Debug(msg.Data, msg.ErrorCode, msg.CommandCode)
+	//	if msg.Data == nil {
+	//		return common.TaskNotCompleteError
+	//	} else if bytes.Compare(msg.Data, []byte("PING LOCAL")) == 0 {
+	//		log.Debug("REPLY FROM LOCAL")
+	//		client.peerConn = remoteListener
+	//		_, _ = util.WriteMessage(client.peerConn, []byte("PING LOCAL"), nil, command)
+	//	}
+	//} else if ClientServer == "C" {
+	//	localListener, err := net.ListenUDP("udp", nil)
+	//	_, _ = util.WriteMessage(localListener, []byte("PING LOCAL"), nil, command)
+	//	if err != nil {
+	//		return err
+	//	}
+	//	remoteSender, err := net.DialUDP("udp", lAddr, remoteAddr)
+	//	if err != nil {
+	//		log.Debug(err)
+	//		return err
+	//	}
+	//	_, _ = util.WriteMessage(remoteSender, []byte("PING REMOTE"), nil, command)
+	//	msg := <-client.chanMap[command.String]
+	//	log.Debug(msg.Data, msg.ErrorCode, msg.CommandCode)
+	//	if msg.Data == nil {
+	//		return common.TaskNotCompleteError
+	//	} else if bytes.Compare(msg.Data, []byte("PING REMOTE")) == 0 {
+	//		log.Debug("REPLY FROM REMOTE")
+	//		client.peerConn = localListener
+	//		_, _ = util.WriteMessage(client.peerConn, []byte("PING REMOTE"), nil, command)
+	//	}
+	//}
 	return err
 }
 
