@@ -341,10 +341,11 @@ func (client *Client) handleRequestP2P() (err error) {
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
 
-	// 1b. Notify server that the rx is ready
-	if _, err := util.WriteMessage(client.conn, nil, nil, command); err != nil {
-		return err
-	}
+	// TODO: Fix rx -> server write msg issue
+	//// 1b. Notify server that the rx is ready
+	//if _, err := util.WriteMessage(client.conn, nil, nil, command); err != nil {
+	//	return err
+	//}
 
 	// 2b. Receive tx public key hash from the server
 	msg := <-client.chanMap[command.String]
@@ -356,9 +357,11 @@ func (client *Client) handleRequestP2P() (err error) {
 	if !ok {
 		return common.ClientNotFoundError
 	}
-	if _, err := util.WriteMessage(client.conn, nil, nil, command); err != nil {
-		return err
-	}
+	// TODO: Fix rx -> server write msg issue
+	//if _, err := util.WriteMessage(client.conn, nil, nil, command); err != nil {
+	//	log.Debug("2 ", err)
+	//	return err
+	//}
 
 	// Peer below allows access to full peer client structure
 	// Possibly will be needed within ui
@@ -372,10 +375,10 @@ func (client *Client) handleRequestP2P() (err error) {
 	msg = <-client.chanMap[command.String]
 	peerRemoteAddr := msg.Data
 
-	// 6. Get result
-	if err = client.getResult(command); err != nil {
-		return err
-	}
+	//// 6. Get result
+	//if err = client.getResult(command); err != nil {
+	//	return err
+	//}
 
 	//time.Sleep(500 * time.Millisecond)
 
@@ -426,10 +429,10 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 		return common.ErrorCodes[peerPublicAddr.ErrorCode]
 	}
 
-	// 6. Get result
-	if err = client.getResult(command); err != nil {
-		return err
-	}
+	//// 6. Get result
+	//if err = client.getResult(command); err != nil {
+	//	return err
+	//}
 
 	// Init hole punch
 	return client.openHolePunchClient(command, string(peerLocalAddr.Data), string(peerPublicAddr.Data))
