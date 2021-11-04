@@ -12,6 +12,8 @@ import (
 
 func initClient() Client {
 	client := InitConfig()
+	client, _ = ReadConfig("../../config/config.yml")
+	log.Debug("Server IP: ", client.ServerHost)
 	client.ServerHost = "coconut-demo.jaeha.dev"
 	pubBlock, _ := cryptography.OpenKeysAsBlock(client.KeyPath, "key.pub")
 	privBlock, _ := cryptography.OpenPrivKey(client.KeyPath, "key.priv")
@@ -28,8 +30,8 @@ func TestDoOpenHolePunch(t *testing.T) {
 	}()
 	err := client.Connect()
 	var key string
-	key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
-	//key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
+	//key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
+	key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
 	//key = "GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
 	err = client.DoRequestP2P([]byte(key))
 	if err != nil {
@@ -37,7 +39,7 @@ func TestDoOpenHolePunch(t *testing.T) {
 	}
 	log.Info(client.peerConn.RemoteAddr())
 	time.Sleep(2 * time.Second)
-	_, _ = util.WriteMessage(client.peerConn, nil, nil, common.RequestP2P)
+	_, _ = util.WriteMessage(client.peerConn, nil, nil, common.File)
 
 }
 
@@ -57,6 +59,10 @@ func TestDoOpenHolePunch2(t *testing.T) {
 	time.Sleep(1 * time.Minute)
 	msg, _ := util.ReadMessage(client.peerConn)
 	log.Debug(string(msg.Data))
+}
+
+func TestClient_DoGetAddCode(t *testing.T) {
+
 }
 
 //func TestConnect(t *testing.T) {
