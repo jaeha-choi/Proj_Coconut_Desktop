@@ -445,7 +445,7 @@ func (client *Client) openHolePunchClient(command *common.Command, peerLAddr str
 	lAddrString := client.conn.LocalAddr().String()
 
 	// Disconnect from relay server
-	log.Debug("HolePunch Initializing\nDisconnecting From Server")
+	log.Debug("HolePunch Initializing; Disconnecting From Server")
 	if err := client.Disconnect(); err != nil {
 		return err
 	}
@@ -470,22 +470,49 @@ func (client *Client) openHolePunchClient(command *common.Command, peerLAddr str
 		return err
 	}
 
-	buffer := make([]byte, 5)
+	buffer := make([]byte, 1024)
 
 	// Reading
+	// **TX**
+	//go func() {
+	//	n, err := conn.Read(buffer)
+	//	if err != nil {
+	//		log.Debug(err)
+	//	}
+	//	fmt.Println(string(buffer[:n]))
+	//	if err != nil {
+	//		return
+	//	}
+	//}()
+
+	// **RX**
 	go func() {
-		for {
-			_, err := conn.Read(buffer)
-			if err != nil {
-				log.Debug(err)
-			}
-			log.Debug("Read: ", string(buffer))
+		log.Debug("Reading file")
+		file, _ := os.OpenFile("checksum.txt", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+		defer file.Close()
+		n, err := conn.Read(buffer)
+		if err != nil {
+			log.Debug(err)
+		}
+		_, _ = file.Write(buffer[:n])
+		if err != nil {
+			return
 		}
 	}()
-
 	// Writing
+	// **TX**
+	//file, _ := ioutil.ReadFile("checksum.txt")
+	//for {
+	//	_, err := conn.WriteTo(file,  addr)
+	//	if err != nil {
+	//		log.Debug(err)
+	//		return err
+	//	}
+	//	time.Sleep(5 * time.Second)
+	//}
+	// **RX**
 	for {
-		_, err := conn.WriteTo([]byte("Hello"), addr)
+		_, err := conn.WriteTo([]byte("hello"), addr)
 		if err != nil {
 			log.Debug(err)
 			return err
