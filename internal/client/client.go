@@ -422,7 +422,7 @@ func (client *Client) openHolePunchClient(ClientServer string, command *common.C
 	localAddr, _ := net.ResolveUDPAddr("udp", addr1)
 	remoteAddr, _ := net.ResolveUDPAddr("udp", addr2)
 	if ClientServer == "S" {
-		remoteListener, err := net.ListenUDP("udp", lAddr)
+		remoteListener, err := net.ListenUDP("udp", nil)
 		if err != nil {
 			log.Debug(err)
 		}
@@ -434,6 +434,7 @@ func (client *Client) openHolePunchClient(ClientServer string, command *common.C
 		//write message to localAddress
 		_, _ = util.WriteMessage(localSender, []byte("PING LOCAL"), nil, command)
 		msg := <-client.chanMap[command.String]
+		log.Debug(msg.Data, msg.ErrorCode, msg.CommandCode)
 		if msg.Data == nil {
 			return common.TaskNotCompleteError
 		} else if bytes.Compare(msg.Data, []byte("PING LOCAL")) == 0 {
@@ -442,7 +443,7 @@ func (client *Client) openHolePunchClient(ClientServer string, command *common.C
 			_, _ = util.WriteMessage(client.peerConn, []byte("PING LOCAL"), nil, command)
 		}
 	} else if ClientServer == "C" {
-		localListener, err := net.ListenUDP("udp", lAddr)
+		localListener, err := net.ListenUDP("udp", nil)
 		if err != nil {
 			return err
 		}
@@ -452,7 +453,7 @@ func (client *Client) openHolePunchClient(ClientServer string, command *common.C
 		}
 		_, _ = util.WriteMessage(remoteSender, []byte("PING REMOTE"), nil, command)
 		msg := <-client.chanMap[command.String]
-
+		log.Debug(msg.Data, msg.ErrorCode, msg.CommandCode)
 		if msg.Data == nil {
 			return common.TaskNotCompleteError
 		} else if bytes.Compare(msg.Data, []byte("PING REMOTE")) == 0 {
