@@ -59,6 +59,8 @@ type Client struct {
 	conn net.Conn
 	// peerConn is a p2p connection between other peer
 	peerConn net.Conn
+	// peerKey is a p2p pubkey hash used to identify the client connected to
+	peerKey string
 	// localAddr is a local address of this client
 	localAddr net.Addr
 	// addCode is the current Add Code associated with this client
@@ -77,7 +79,7 @@ type Contact struct {
 	// PubKeyHash stores the SHA256 hash of added device's public key
 	PubKeyHash []byte
 	// PubKey stores the PEM formatted public key of added device's public key
-	PubKey *pem.Block
+	PubKey *rsa.PublicKey
 }
 
 // InitConfig initializes a default Client struct.
@@ -149,7 +151,11 @@ func (client *Client) commandHandler() {
 			}()
 		} else if command == common.RequestP2P {
 			go func() {
-				err = client.handleRequestP2P()
+				err = client.HandleRequestP2P()
+			}()
+		} else if command == common.File {
+			go func() {
+				err = client.HandleGetFile()
 			}()
 		} else {
 			err = common.UnknownCommandError
@@ -335,7 +341,64 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 	return client.getResult(command)
 }
 
-func (client *Client) handleRequestP2P() (err error) {
+// DoSendFile encrypts and sends the file using the peers public key
+func (client *Client) DoSendFile(fileName string, key string) (err error) {
+	var command = common.File
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
+	// setup, encrypt
+	chunk, err := cryptography.EncryptSetup(fileName)
+	if err != nil {
+		log.Error("Error processing file: ", err)
+		return err
+	}
+
+	//get RX pubkey from client stored in contact map
+	//cryptography.OpenPubKey()
+	pubKey := client.contactMap[client.peerKey].PubKey
+	if pubKey == nil {
+		return common.PubKeyNotFoundError
+	}
+	//get TX privkey
+	privKey := client.privKey
+
+	// encrypt and send file
+	err = chunk.Encrypt(client.peerConn, pubKey, privKey)
+	if err != nil {
+		log.Error("Error encrypting file")
+		return err
+	}
+	return err
+}
+
+// HandleGetFile receives and decrypts the specified file using private key
+func (client *Client) HandleGetFile() (err error) {
+	var command = common.File
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
+	// setup, decrypt
+	chunk, err := cryptography.DecryptSetup()
+	if err != nil {
+		log.Error("Error setting up decryption")
+		return err
+	}
+
+	//get RX pubkey from client stored in contact map
+	//cryptography.OpenPubKey()
+	pubKey := client.contactMap[client.peerKey].PubKey
+	if pubKey == nil {
+		return common.PubKeyNotFoundError
+	}
+	//get TX privkey
+	privKey := client.privKey
+
+	// store file in downloads
+	err = chunk.Decrypt(client.chanMap[command.String], pubKey, privKey)
+
+	return err
+}
+
+func (client *Client) HandleRequestP2P() (err error) {
 	// Init
 	var command = common.RequestP2P // TODO: Update to HandleRequestP2P
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
@@ -352,11 +415,11 @@ func (client *Client) handleRequestP2P() (err error) {
 	// Find tx using tx public key hash
 	// TODO change "_" to "peerStruct" to retrieve pointer to structure
 	_, ok := client.contactMap[string(msg.Data)]
-
 	// 3b. Notify server that tx is found/not found
 	if !ok {
 		return common.ClientNotFoundError
 	}
+	client.peerKey = string(msg.Data)
 	// TODO: Fix rx -> server write msg issue
 	//if _, err := util.WriteMessage(client.conn, nil, nil, command); err != nil {
 	//	log.Debug("2 ", err)
@@ -383,7 +446,7 @@ func (client *Client) handleRequestP2P() (err error) {
 	//time.Sleep(500 * time.Millisecond)
 
 	// Init hole punch
-	return client.openHolePunchClient(command, string(peerLocalAddr), string(peerRemoteAddr))
+	return client.openHolePunch(string(peerLocalAddr), string(peerRemoteAddr))
 }
 
 // DoRequestP2P signals the relay server that a client wants to connect to another client
@@ -411,12 +474,12 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 	if err != nil {
 		return err
 	}
+	client.peerKey = string(pkHash)
 
 	// 3a. Read error code for finding rx client
 	if msg := <-client.chanMap[command.String]; msg.ErrorCode != 0 {
 		return common.ErrorCodes[msg.ErrorCode]
 	}
-
 	// 4a. Receive rx localIP:localPort to tx
 	peerLocalAddr := <-client.chanMap[command.String]
 	if peerLocalAddr.ErrorCode != 0 {
@@ -435,13 +498,13 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 	//}
 
 	// Init hole punch
-	return client.openHolePunchClient(command, string(peerLocalAddr.Data), string(peerPublicAddr.Data))
+	return client.openHolePunch(string(peerLocalAddr.Data), string(peerPublicAddr.Data))
 }
 
 // openHolePunchClient Initiates the connection between client and peer
-// returns connection stored in client.peerConn is connection made
-// TODO: WIP
-func (client *Client) openHolePunchClient(command *common.Command, peerLAddr string, peerAddr string) (err error) {
+// stores UDP connection in client.peerConn and returns error is applicable
+// TODO: remove local string
+func (client *Client) openHolePunch(local string, remote string) (err error) {
 	lAddrString := client.conn.LocalAddr().String()
 
 	// Disconnect from relay server
@@ -450,114 +513,72 @@ func (client *Client) openHolePunchClient(command *common.Command, peerLAddr str
 		return err
 	}
 
-	log.Debug("Peer local Addr: ", peerLAddr, ", Peer public Addr: ", peerAddr)
+	log.Info("Peer local Addr: ", local, ", Peer public Addr: ", remote)
 
 	// Resolve local and remote addresses
 	lAddr, err := net.ResolveUDPAddr("udp", lAddrString)
-	if err != nil {
-		log.Debug(err)
-		return err
-	}
-	addr, err := net.ResolveUDPAddr("udp", peerAddr)
+
 	if err != nil {
 		log.Debug(err)
 		return err
 	}
 
 	conn, err := net.ListenUDP("udp", lAddr)
+	client.peerConn = conn
 	if err != nil {
 		log.Debug(err)
 		return err
 	}
+	return err
 
-	buffer := make([]byte, 1024)
-
-	// Reading
-	// **TX**
-	//go func() {
-	//	n, err := conn.Read(buffer)
-	//	if err != nil {
-	//		log.Debug(err)
-	//	}
-	//	fmt.Println(string(buffer[:n]))
-	//	if err != nil {
-	//		return
-	//	}
-	//}()
-
-	// **RX**
-	go func() {
-		log.Debug("Reading file")
-		file, _ := os.OpenFile("checksum.txt", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-		defer file.Close()
-		n, err := conn.Read(buffer)
-		if err != nil {
-			log.Debug(err)
-		}
-		_, _ = file.Write(buffer[:n])
-		if err != nil {
-			return
-		}
-	}()
-	// Writing
-	// **TX**
-	//file, _ := ioutil.ReadFile("checksum.txt")
-	//for {
-	//	_, err := conn.WriteTo(file,  addr)
-	//	if err != nil {
-	//		log.Debug(err)
-	//		return err
-	//	}
-	//	time.Sleep(5 * time.Second)
-	//}
-	// **RX**
-	for {
-		_, err := conn.WriteTo([]byte("hello"), addr)
-		if err != nil {
-			log.Debug(err)
-			return err
-		}
-		time.Sleep(5 * time.Second)
-	}
 }
 
-//wg.Add(1)
-//go client.doInitP2PConn(&wg, addr1)
-//
-//wg.Add(1)
-//go client.doInitP2PConn(&wg, addr2)
-//
-//// wait for goroutines to finish
-//wg.Wait()
-//
-//if client.peerConn != nil {
-//	log.Info("Connection made to: ", client.peerConn.RemoteAddr())
-//} else {
-//	log.Error("Unable to establish connection to peer")
-//	return common.PeerUnavailableError
-
-//// initP2PConn initialize a connection with the provided.
-//// client.peerConn contains p2p connection if dialing was successful
-//// TODO: WIP
-//func (client *Client) doInitP2PConn(wg *sync.WaitGroup, addr string) {
-//	defer wg.Done()
-//	log.Debug("Attempting to connect to: ", addr)
-//	privBuffer := make([]byte, 1024)
-//	p2p, err := net.Dial("udp", addr)
+// Reading
+// **TX**
+//go func() {
+//	n, err := conn.Read(buffer)
 //	if err != nil {
-//		log.Debug("Unable to connect: ", addr)
+//		log.Debug(err)
+//	}
+//	fmt.Println(string(buffer[:n]))
+//	if err != nil {
 //		return
 //	}
-//	//util.WriteMessage(p2p, nil, nil, common.HolePunchPING)
-//	log.Debug("Connection success: ", p2p.RemoteAddr())
-//	client.peerConn = p2p
-//	// TODO uncomment next line if `common.HolePunchPing.String()` exists
-//	//	_, _ = p2p.Write([]byte(common.HolePunchPing.String()))
-//	_, _ = p2p.Write([]byte("PING"))
-//	_, _ = p2p.Read(privBuffer)
-//	//i, _ := p2p.Read(privBuffer)
-//	//log.Debug(string(privBuffer[:i]))
-//
+//}()
+
+// **RX**
+//go func() {
+//	log.Debug("Reading file")
+//	file, _ := os.OpenFile("checksum.txt", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+//	defer file.Close()
+//	n, err := conn.Read(buffer)
+//	if err != nil {
+//		log.Debug(err)
+//	}
+//	_, _ = file.Write(buffer[:n])
+//	if err != nil {
+//		return
+//	}
+//}()
+// Writing
+// **TX**
+//file, _ := ioutil.ReadFile("checksum.txt")
+//for {
+//	_, err := conn.WriteTo(file,  addr)
+//	if err != nil {
+//		log.Debug(err)
+//		return err
+//	}
+//	time.Sleep(5 * time.Second)
+//}
+// **RX**
+//for {
+//	_, err := conn.WriteTo([]byte("hello"), addr)
+//	if err != nil {
+//		log.Debug(err)
+//		return err
+//	}
+//	time.Sleep(5 * time.Second)
 //}
 
 // ReadContactsFile read the contents of contacts.gob into client.contactMap
@@ -608,7 +629,7 @@ func (client *Client) WriteContactsFile() (err error) {
 
 // addContact initializes new contact struct
 // Returns true if contact is added or already in list, false otherwise
-func (client *Client) addContact(firstName string, lastName string, pkHash []byte, pubKey *pem.Block) (inserted bool) {
+func (client *Client) addContact(firstName string, lastName string, pkHash []byte, pubKey *rsa.PublicKey) (inserted bool) {
 	pkHashStr := string(pkHash)
 	// check if contact already in list
 	if _, isFound := client.contactMap[pkHashStr]; isFound {

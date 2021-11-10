@@ -27,9 +27,9 @@ func TestDoOpenHolePunch(t *testing.T) {
 	}()
 	err := client.Connect()
 	var key string
-	key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
+	//key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
 	//key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
-	//key = "GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
+	key = "GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
 	err = client.DoRequestP2P([]byte(key))
 	if err != nil {
 		t.Error(err)
@@ -46,7 +46,7 @@ func TestDoOpenHolePunch2(t *testing.T) {
 	}()
 	err := client.Connect()
 	client.addContact("jaeha", "choi", []byte("su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="), nil)
-	client.addContact("robin", "seo", []byte("giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598="), nil)
+	client.addContact("robin", "seo", []byte("FBkHZ6e+q4yxaE9TsvPtFbE9HF1vpJP2MnWjvmWWiGI="), nil)
 	client.addContact("duncan", "spani", []byte("GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), nil)
 	if err != nil {
 		t.Error(err)
@@ -71,6 +71,8 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
+		// WAITING FOR CONNECTION
+		log.Debug("IN TEST: waiting for connection")
 		time.Sleep(1 * time.Minute)
 		//msg, _ := util.ReadMessage(client.peerConn)
 		//log.Debug(string(msg.Data))
@@ -89,7 +91,7 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 		var key string
 		//key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
 		//key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
-		key = "GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
+		//key = "GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
 		err = client2.DoRequestP2P([]byte(key))
 		if err != nil {
 			t.Error(err)
