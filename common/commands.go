@@ -14,10 +14,8 @@ var CommandCodes = [256]*Command{
 	GetAddCode,
 	EndRelay,
 	RequestRelay,
-	GetP2PKey,
+	HandleRequestP2P,
 	RequestP2P,
-	HolePunchPING,
-	HolePunchPONG,
 	File,
 }
 
@@ -53,10 +51,8 @@ var RequestRelay = &Command{
 	String: "RELY",
 	Code:   7,
 }
-
-// GetP2PKey get public key for client you want to connect
-var GetP2PKey = &Command{
-	String: "GKEY",
+var HandleRequestP2P = &Command{
+	String: "HPTP",
 	Code:   8,
 }
 
@@ -66,20 +62,8 @@ var RequestP2P = &Command{
 	Code:   9,
 }
 
-// HolePunchPING init command for p2p connection
-var HolePunchPING = &Command{
-	String: "PING",
-	Code:   10,
-}
-
-// HolePunchPONG init reply to "PING" command
-var HolePunchPONG = &Command{
-	String: "PONG",
-	Code:   11,
-}
-
 // File command is used when exchanging encrypted files
 var File = &Command{
 	String: "FILE",
-	Code:   12,
+	Code:   11,
 }
