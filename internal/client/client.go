@@ -58,7 +58,9 @@ type Client struct {
 	// conn is a connection to the central relay server
 	conn net.Conn
 	// peerConn is a p2p connection between other peer
-	peerConn net.Conn
+	peerConn *net.UDPConn
+	// peerAddr
+	peerAddr *net.UDPAddr
 	// peerKey is a p2p pubkey hash used to identify the client connected to
 	peerKey string
 	// localAddr is a local address of this client
@@ -69,6 +71,8 @@ type Client struct {
 	contactMap map[string]*Contact
 	// chanMap stores the map of channels. Uses command string as a key
 	chanMap map[string]chan *util.Message
+	// logger
+	logger *log.Logger
 }
 
 // Contact stores information about added contacts
@@ -76,14 +80,12 @@ type Contact struct {
 	// FirstName and LastName is a name that can be set to distinguish added devices
 	FirstName string
 	LastName  string
-	// PubKeyHash stores the SHA256 hash of added device's public key
-	PubKeyHash []byte
 	// PubKey stores the PEM formatted public key of added device's public key
-	PubKey *rsa.PublicKey
+	PubKeyFile string
 }
 
 // InitConfig initializes a default Client struct.
-func InitConfig() (client *Client) {
+func InitConfig(log *log.Logger) (client *Client) {
 	client = &Client{
 		ServerHost:  "127.0.0.1", // TODO: update this value after deploying the relay server
 		ServerPort:  defaultServerPort,
@@ -95,27 +97,29 @@ func InitConfig() (client *Client) {
 		pubKeyBlock: nil,
 		conn:        nil,
 		peerConn:    nil,
+		peerKey:     "",
 		localAddr:   nil,
 		addCode:     "",
 		contactMap:  make(map[string]*Contact),
 		chanMap:     make(map[string]chan *util.Message),
+		logger:      log,
 	}
 	return client
 }
 
 // ReadConfig reads a config from a yaml file and override default settings
-func ReadConfig(fileName string) (client *Client, err error) {
+func ReadConfig(fileName string, log *log.Logger) (client *Client, err error) {
 	file, err := ioutil.ReadFile(fileName)
 	if err != nil {
-		log.Debug(err)
+		client.logger.Debug(err)
 		return nil, err
 	}
 
-	client = InitConfig()
+	client = InitConfig(log)
 	err = yaml.Unmarshal(file, &client)
 	if err != nil {
-		log.Debug(err)
-		log.Error("Error while parsing config.yml")
+		client.logger.Debug(err)
+		client.logger.Error("Error while parsing config.yml")
 		return nil, err
 	}
 	return client, nil
@@ -138,7 +142,7 @@ func (client *Client) commandHandler() {
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			log.Debug(err)
+			client.logger.Debug(err)
 			break
 		}
 		command := common.CommandCodes[msg.CommandCode]
@@ -149,7 +153,7 @@ func (client *Client) commandHandler() {
 			go func() {
 				err = client.handleGetPubKey()
 			}()
-		} else if command == common.RequestP2P {
+		} else if command == common.HandleRequestP2P {
 			go func() {
 				err = client.HandleRequestP2P()
 			}()
@@ -159,6 +163,11 @@ func (client *Client) commandHandler() {
 			}()
 		} else {
 			err = common.UnknownCommandError
+		}
+		if err != nil {
+			log.Debug("command handler ", command)
+			log.Debug("command handler ", string(msg.Data))
+			log.Error(err)
 		}
 	}
 }
@@ -170,7 +179,7 @@ func (client *Client) Connect() (err error) {
 		// Client already established active connection
 		return common.ExistingConnError
 	}
-	log.Debug("Connecting...")
+	client.logger.Debug("Connecting...")
 	// TODO: Double check if resolving is necessary
 	resolvedHost, err := net.ResolveIPAddr("ip", client.ServerHost)
 	if err != nil {
@@ -179,12 +188,12 @@ func (client *Client) Connect() (err error) {
 	client.ServerHost = resolvedHost.String()
 	client.conn, err = tls.Dial("tcp", client.ServerHost+":"+strconv.Itoa(int(client.ServerPort)), client.tlsConfig)
 	if err != nil {
-		log.Debug(err)
-		log.Error("Error while connecting to the server")
+		client.logger.Debug(err)
+		client.logger.Error("Error while connecting to the server")
 		return err
 	}
 	client.localAddr = client.conn.LocalAddr()
-	log.Debug("Connected")
+	client.logger.Debug("Connected")
 
 	go client.commandHandler()
 
@@ -196,35 +205,38 @@ func (client *Client) Disconnect() (err error) {
 	if client.conn == nil {
 		return nil
 	}
-	log.Debug("Disconnecting...")
+	client.logger.Debug("Disconnecting...")
 	if err = client.doQuit(); err != nil {
-		log.Debug(err)
-		log.Error("Task is not complete")
+		client.logger.Debug(err)
+		client.logger.Error("Task is not complete")
 		return common.TaskNotCompleteError
 	}
 	// Timer allows graceful shutdown for client.conn
 	time.Sleep(1 * time.Second)
 	if err = client.conn.Close(); err != nil {
-		log.Debug(err)
-		log.Error("Error while disconnecting from the server")
+		client.logger.Debug(err)
+		client.logger.Error("Error while disconnecting from the server")
 		return err
 	}
 	client.conn = nil
-	log.Debug("Disconnected")
+	client.logger.Debug("Disconnected")
 	return nil
 }
 
 // handleGetPubKey is called when the relay server requests this client's public key
 func (client *Client) handleGetPubKey() (err error) {
-	var command = common.GetAddCode
+	client.logger.Debug("writing pubkey")
+	var command = common.RequestPubKey
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
-
-	if _, err = util.WriteMessage(client.conn, client.pubKeyBlock.Bytes, nil, command); err != nil {
-		log.Debug(err)
-		log.Error("Error while sending public key")
+	_, _ = util.WriteMessage(client.conn, nil, nil, common.Pause)
+	n, err := util.WriteMessage(client.conn, client.pubKeyBlock.Bytes, nil, command)
+	if err != nil {
+		client.logger.Debug(err)
+		client.logger.Error("Error while sending public key")
 		return err
 	}
+	client.logger.Debug(n, " bytes written")
 	return nil
 }
 
@@ -237,14 +249,14 @@ func (client *Client) doInit() (err error) {
 
 	pubKeyHash := cryptography.PemToSha256(client.pubKeyBlock)
 	if _, err = util.WriteMessage(client.conn, pubKeyHash, nil, command); err != nil {
-		log.Debug(err)
-		log.Error("Error while sending public key hash")
+		client.logger.Debug(err)
+		client.logger.Error("Error while sending public key hash")
 		return err
 	}
 	localAddress := client.localAddr.String()
 	if _, err = util.WriteMessage(client.conn, []byte(localAddress), nil, command); err != nil {
-		log.Debug(err)
-		log.Error("Error while sending local ip address")
+		client.logger.Debug(err)
+		client.logger.Error("Error while sending local ip address")
 		return err
 	}
 
@@ -258,8 +270,8 @@ func (client *Client) doQuit() (err error) {
 	defer delete(client.chanMap, command.String)
 
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
-		log.Debug(err)
-		log.Error("Error while quit command")
+		client.logger.Debug(err)
+		client.logger.Error("Error while quit command")
 		return err
 	}
 
@@ -321,6 +333,7 @@ func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
 // then save it as fileName
 // Returns common.ClientNotFoundError if no client is found
 func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err error) {
+	client.logger.Debug("requesting pubkey")
 	var command = common.RequestPubKey
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
@@ -334,6 +347,7 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 
 	// Get rxPubKeyBytes
 	msg := <-client.chanMap[command.String]
+	client.logger.Info(msg.Data)
 	if err = cryptography.BytesToPemFile(msg.Data, fileName); err != nil {
 		return err
 	}
@@ -342,30 +356,40 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 }
 
 // DoSendFile encrypts and sends the file using the peers public key
-func (client *Client) DoSendFile(fileName string, key string) (err error) {
+func (client *Client) DoSendFile(fileName string) (err error) {
+	client.logger.Debug("Sending file: ", fileName)
 	var command = common.File
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
 	// setup, encrypt
+	// send init packet
+	if _, err = util.WriteMessage(client.peerConn, nil, nil, command); err != nil {
+		client.logger.Error("Error writing to server")
+		return err
+	}
+
 	chunk, err := cryptography.EncryptSetup(fileName)
 	if err != nil {
-		log.Error("Error processing file: ", err)
+		client.logger.Error("Error processing file: ", err)
 		return err
 	}
 
 	//get RX pubkey from client stored in contact map
 	//cryptography.OpenPubKey()
-	pubKey := client.contactMap[client.peerKey].PubKey
-	if pubKey == nil {
+	pubKey, err := cryptography.OpenPubKey(keyPath, client.contactMap[client.peerKey].PubKeyFile)
+	if err != nil {
+		client.logger.Error(err)
 		return common.PubKeyNotFoundError
 	}
+	//pubKey := client.contactMap[client.peerKey].PubKey
+
 	//get TX privkey
 	privKey := client.privKey
 
 	// encrypt and send file
 	err = chunk.Encrypt(client.peerConn, pubKey, privKey)
 	if err != nil {
-		log.Error("Error encrypting file")
+		client.logger.Error("Error encrypting file")
 		return err
 	}
 	return err
@@ -373,20 +397,22 @@ func (client *Client) DoSendFile(fileName string, key string) (err error) {
 
 // HandleGetFile receives and decrypts the specified file using private key
 func (client *Client) HandleGetFile() (err error) {
+	client.logger.Debug("Preparing to receive file")
 	var command = common.File
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
 	// setup, decrypt
 	chunk, err := cryptography.DecryptSetup()
 	if err != nil {
-		log.Error("Error setting up decryption")
+		client.logger.Error("Error setting up decryption")
 		return err
 	}
 
 	//get RX pubkey from client stored in contact map
 	//cryptography.OpenPubKey()
-	pubKey := client.contactMap[client.peerKey].PubKey
-	if pubKey == nil {
+	pubKey, err := cryptography.OpenPubKey(keyPath, client.contactMap[client.peerKey].PubKeyFile)
+	if err != nil {
+		client.logger.Error(err)
 		return common.PubKeyNotFoundError
 	}
 	//get TX privkey
@@ -394,13 +420,17 @@ func (client *Client) HandleGetFile() (err error) {
 
 	// store file in downloads
 	err = chunk.Decrypt(client.chanMap[command.String], pubKey, privKey)
-
+	if err != nil {
+		client.logger.Error("Error decrypting file")
+		return err
+	}
+	client.logger.Debug("End receiving file")
 	return err
 }
 
 func (client *Client) HandleRequestP2P() (err error) {
 	// Init
-	var command = common.RequestP2P // TODO: Update to HandleRequestP2P
+	var command = common.HandleRequestP2P // TODO: Update to HandleRequestP2P
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
 
@@ -422,7 +452,7 @@ func (client *Client) HandleRequestP2P() (err error) {
 	client.peerKey = string(msg.Data)
 	// TODO: Fix rx -> server write msg issue
 	//if _, err := util.WriteMessage(client.conn, nil, nil, command); err != nil {
-	//	log.Debug("2 ", err)
+	//	client.logger.Debug("2 ", err)
 	//	return err
 	//}
 
@@ -459,7 +489,7 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 
 	// 0. Write command
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
-		log.Error("Error writing to server")
+		client.logger.Error("Error writing to server")
 		return err
 	}
 
@@ -491,7 +521,11 @@ func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 	if peerPublicAddr.ErrorCode != 0 {
 		return common.ErrorCodes[peerPublicAddr.ErrorCode]
 	}
-
+	//for {
+	//	msg := <-client.chanMap[command.String]
+	//	client.logger.Debug(string(msg.Data))
+	//
+	//}
 	//// 6. Get result
 	//if err = client.getResult(command); err != nil {
 	//	return err
@@ -508,25 +542,25 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 	lAddrString := client.conn.LocalAddr().String()
 
 	// Disconnect from relay server
-	log.Debug("HolePunch Initializing; Disconnecting From Server")
+	client.logger.Debug("HolePunch Initializing; Disconnecting From Server")
 	if err := client.Disconnect(); err != nil {
 		return err
 	}
 
-	log.Info("Peer local Addr: ", local, ", Peer public Addr: ", remote)
+	client.logger.Info("Peer local Addr: ", local, ", Peer public Addr: ", remote)
 
-	// Resolve local and remote addresses
+	// Resolve local address
 	lAddr, err := net.ResolveUDPAddr("udp", lAddrString)
 
 	if err != nil {
-		log.Debug(err)
+		client.logger.Debug(err)
 		return err
 	}
 
-	conn, err := net.ListenUDP("udp", lAddr)
-	client.peerConn = conn
+	client.peerConn, err = net.ListenUDP("udp", lAddr)
+	client.peerAddr, err = net.ResolveUDPAddr("udp", remote)
 	if err != nil {
-		log.Debug(err)
+		client.logger.Debug(err)
 		return err
 	}
 	return err
@@ -538,7 +572,7 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 //go func() {
 //	n, err := conn.Read(buffer)
 //	if err != nil {
-//		log.Debug(err)
+//		client.logger.Debug(err)
 //	}
 //	fmt.Println(string(buffer[:n]))
 //	if err != nil {
@@ -548,12 +582,12 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 
 // **RX**
 //go func() {
-//	log.Debug("Reading file")
+//	client.logger.Debug("Reading file")
 //	file, _ := os.OpenFile("checksum.txt", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 //	defer file.Close()
 //	n, err := conn.Read(buffer)
 //	if err != nil {
-//		log.Debug(err)
+//		client.logger.Debug(err)
 //	}
 //	_, _ = file.Write(buffer[:n])
 //	if err != nil {
@@ -566,7 +600,7 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 //for {
 //	_, err := conn.WriteTo(file,  addr)
 //	if err != nil {
-//		log.Debug(err)
+//		client.logger.Debug(err)
 //		return err
 //	}
 //	time.Sleep(5 * time.Second)
@@ -575,7 +609,7 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 //for {
 //	_, err := conn.WriteTo([]byte("hello"), addr)
 //	if err != nil {
-//		log.Debug(err)
+//		client.logger.Debug(err)
 //		return err
 //	}
 //	time.Sleep(5 * time.Second)
@@ -585,14 +619,14 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 func (client *Client) ReadContactsFile() (err error) {
 	file, err := os.OpenFile(filepath.Join(client.DataPath, "contacts.gob"), os.O_RDONLY|os.O_CREATE, 0666)
 	if err != nil {
-		log.Error("Error opening file: ", err)
+		client.logger.Error("Error opening file: ", err)
 		return err
 	}
 
 	defer func() {
 		err = file.Close()
 		if err != nil {
-			log.Error("Error closing file: ", err)
+			client.logger.Error("Error closing file: ", err)
 		}
 	}()
 
@@ -601,8 +635,8 @@ func (client *Client) ReadContactsFile() (err error) {
 		//client.contactMap = nil
 		return nil
 	} else if err != nil {
-		log.Debug(err)
-		log.Error("Error decoding file: ", err)
+		client.logger.Debug(err)
+		client.logger.Error("Error decoding file: ", err)
 		return err
 	}
 	return err
@@ -612,15 +646,15 @@ func (client *Client) ReadContactsFile() (err error) {
 func (client *Client) WriteContactsFile() (err error) {
 	file, err := os.OpenFile(filepath.Join(client.DataPath, "contacts.gob"), os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
-		log.Debug(err)
-		log.Error("Error opening file: ", err)
+		client.logger.Debug(err)
+		client.logger.Error("Error opening file: ", err)
 		return err
 	}
 
 	defer func() {
 		err = file.Close()
 		if err != nil {
-			log.Error("Error closing file: ", err)
+			client.logger.Error("Error closing file: ", err)
 		}
 	}()
 
@@ -629,7 +663,7 @@ func (client *Client) WriteContactsFile() (err error) {
 
 // addContact initializes new contact struct
 // Returns true if contact is added or already in list, false otherwise
-func (client *Client) addContact(firstName string, lastName string, pkHash []byte, pubKey *rsa.PublicKey) (inserted bool) {
+func (client *Client) addContact(firstName string, lastName string, pkHash []byte, fileName string) (inserted bool) {
 	pkHashStr := string(pkHash)
 	// check if contact already in list
 	if _, isFound := client.contactMap[pkHashStr]; isFound {
@@ -639,8 +673,7 @@ func (client *Client) addContact(firstName string, lastName string, pkHash []byt
 	contact := Contact{
 		firstName,
 		lastName,
-		pkHash,
-		pubKey,
+		fileName,
 	}
 	client.contactMap[pkHashStr] = &contact
 	return true
