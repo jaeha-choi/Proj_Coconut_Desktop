@@ -161,13 +161,16 @@ func (client *Client) commandHandler() {
 			go func() {
 				err = client.HandleGetFile()
 			}()
+		} else if command == common.Pause {
+			// signals ending of previously sent pause command
+			continue
 		} else {
 			err = common.UnknownCommandError
 		}
 		if err != nil {
-			log.Debug("command handler ", command)
-			log.Debug("command handler ", string(msg.Data))
-			log.Error(err)
+			client.logger.Debug("command handler error: ", command)
+			client.logger.Debug("command handler error: ", string(msg.Data))
+			client.logger.Error(err)
 		}
 	}
 }
@@ -225,19 +228,53 @@ func (client *Client) Disconnect() (err error) {
 
 // handleGetPubKey is called when the relay server requests this client's public key
 func (client *Client) handleGetPubKey() (err error) {
-	client.logger.Debug("writing pubkey")
 	var command = common.RequestPubKey
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
-	defer delete(client.chanMap, command.String)
-	_, _ = util.WriteMessage(client.conn, nil, nil, common.Pause)
-	n, err := util.WriteMessage(client.conn, client.pubKeyBlock.Bytes, nil, command)
+	defer func() {
+		msg := <-client.chanMap[command.String]
+		delete(client.chanMap, command.String)
+		err = common.ErrorCodes[msg.ErrorCode]
+	}()
+	_, err = util.WriteMessage(client.conn, nil, nil, common.Pause)
+	if err != nil {
+		client.logger.Debug(err)
+		return err
+	}
+	n, err := util.WriteMessage(client.conn, pem.EncodeToMemory(client.pubKeyBlock), nil, command)
 	if err != nil {
 		client.logger.Debug(err)
 		client.logger.Error("Error while sending public key")
 		return err
 	}
 	client.logger.Debug(n, " bytes written")
-	return nil
+	return err
+}
+
+// DoRequestPubKey signals the relay server to send public key associated with provided Add Code (rxAddCodeStr),
+// then save it as fileName
+// Returns common.ClientNotFoundError if no client is found
+func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err error) {
+	var command = common.RequestPubKey
+	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
+	defer delete(client.chanMap, command.String)
+
+	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
+		return err
+	}
+	if _, err = util.WriteMessage(client.conn, []byte(rxAddCodeStr), nil, command); err != nil {
+		return err
+	}
+
+	// Get rxPubKeyBytes
+	msg := <-client.chanMap[command.String]
+	// DO NOT CHANGE PERMISSION BITS
+	if err = os.WriteFile(fileName, msg.Data, 0x777); err != nil {
+		return err
+	}
+	//if err = cryptography.BytesToPemFile(msg.Data, fileName); err != nil {
+	//	return err
+	//}
+	return client.getResult(command)
 }
 
 // doInit initializes the connection by sending this client's public key hash (SHA256) and
@@ -325,32 +362,6 @@ func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
 		return err
 	}
 	// Add file relay here
-
-	return client.getResult(command)
-}
-
-// DoRequestPubKey signals the relay server to send public key associated with provided Add Code (rxAddCodeStr),
-// then save it as fileName
-// Returns common.ClientNotFoundError if no client is found
-func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err error) {
-	client.logger.Debug("requesting pubkey")
-	var command = common.RequestPubKey
-	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
-	defer delete(client.chanMap, command.String)
-
-	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
-		return err
-	}
-	if _, err = util.WriteMessage(client.conn, []byte(rxAddCodeStr), nil, command); err != nil {
-		return err
-	}
-
-	// Get rxPubKeyBytes
-	msg := <-client.chanMap[command.String]
-	client.logger.Info(msg.Data)
-	if err = cryptography.BytesToPemFile(msg.Data, fileName); err != nil {
-		return err
-	}
 
 	return client.getResult(command)
 }

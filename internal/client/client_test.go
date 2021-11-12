@@ -14,8 +14,15 @@ func initClient(keyN string, log *log.Logger) Client {
 
 	client := InitConfig(log)
 	//client.ServerHost = "coconut-demo.jaeha.dev"
-	pubBlock, _ := cryptography.OpenKeysAsBlock(client.KeyPath, keyN+".pub")
-	privBlock, _ := cryptography.OpenPrivKey(client.KeyPath, keyN+".priv")
+	pubBlock, err := cryptography.OpenKeysAsBlock(client.KeyPath, keyN+".pub")
+	if err != nil {
+		log.Error(err)
+	}
+	privBlock, err := cryptography.OpenPrivKey(client.KeyPath, keyN+".priv")
+	if err != nil {
+		log.Error(err)
+	}
+	log.Debug(pubBlock)
 	client.pubKeyBlock = pubBlock
 	client.privKey = privBlock
 	return *client
@@ -74,11 +81,14 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 	client := initClient("keyJae", l2)
 	go func() {
 
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Second)
 		// *P2P CLIENT*
 		// get add code
 		defer func() {
-			_ = client.Disconnect()
+			err := client.Disconnect()
+			if err != nil {
+				client.logger.Error(err)
+			}
 		}()
 		_ = client.Connect()
 		client.logger.Info(client.conn.LocalAddr())
@@ -90,8 +100,7 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 		client.logger.Info("server add code: ", server.addCode)
-		time.Sleep(10 * time.Second)
-		err := client.DoRequestPubKey(server.addCode, "server.pub")
+		err := client.DoRequestPubKey(server.addCode, "server.key")
 		if err != nil {
 			client.logger.Error(err)
 		}
@@ -101,7 +110,7 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 		//client.addContact("duncan", "spani", []byte("GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), "server.pub")
 		//client.addContact("duncan2", "spani2", []byte("haGoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), nil)
 		client.logger.Info("end")
-		time.Sleep(1 * time.Minute)
+		time.Sleep(5 * time.Second)
 	}()
 
 	time.Sleep(1 * time.Second)
@@ -109,7 +118,10 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 	go func() {
 		// *P2P SERVER*
 		defer func() {
-			_ = server.Disconnect()
+			err := server.Disconnect()
+			if err != nil {
+				server.logger.Error(err)
+			}
 		}()
 		err := server.Connect()
 		server.logger.Info(server.conn.LocalAddr())
@@ -127,7 +139,7 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 		server.logger.Info("client add code: ", client.addCode)
-		err = server.DoRequestPubKey(client.addCode, "client.pub")
+		err = server.DoRequestPubKey(client.addCode, "client.key")
 		if err != nil {
 			server.logger.Error(err)
 		}
@@ -142,11 +154,10 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 		//}
 		//server.DoSendFile("./config.yml")
 		server.logger.Info("end")
-		time.Sleep(1 * time.Minute)
-
+		time.Sleep(5 * time.Second)
 	}()
 
-	time.Sleep(1 * time.Minute)
+	time.Sleep(10 * time.Second)
 
 }
 
