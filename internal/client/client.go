@@ -139,7 +139,7 @@ func (client *Client) getResult(command *common.Command) (err error) {
 func (client *Client) commandHandler() {
 	for {
 		msg, err := util.ReadMessage(client.conn)
-		client.logger.Debug(msg.CommandCode, msg.ErrorCode, string(msg.Data))
+		//client.logger.Debug(msg.CommandCode, msg.ErrorCode, string(msg.Data))
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -150,7 +150,7 @@ func (client *Client) commandHandler() {
 		// TODO: Error handling
 		if c, ok := client.chanMap[command.String]; ok {
 			c <- msg
-		} else if command == common.GetPubKey {
+		} else if command == common.RequestPubKey {
 			go func() {
 				err = client.handleGetPubKey()
 			}()
@@ -229,6 +229,7 @@ func (client *Client) Disconnect() (err error) {
 
 // handleGetPubKey is called when the relay server requests this client's public key
 func (client *Client) handleGetPubKey() (err error) {
+	client.logger.Debug("Enter handleGetPubKey")
 	var command = common.RequestPubKey
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer func() {
@@ -287,8 +288,7 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 	//	return err
 	//}
 
-	msg = <-client.chanMap[command.String]
-	client.logger.Debug("in rp2p end: ", string(msg.Data))
+	//msg = <-client.chanMap[command.String]
 	return client.getResult(command)
 }
 

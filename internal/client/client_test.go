@@ -13,7 +13,7 @@ import (
 func initClient(keyN string, log *log.Logger) Client {
 
 	client := InitConfig(log)
-	client.KeyPath = "/home/duncan/projects/Proj_Coconut_Desktop"
+	//client.KeyPath = "/home/duncan/projects/Proj_Coconut_Desktop"
 	//client.ServerHost = "coconut-demo.jaeha.dev"
 	pubBlock, err := cryptography.OpenKeysAsBlock(client.KeyPath, keyN+".pub")
 	if err != nil {
@@ -80,20 +80,20 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 	server := initClient("key", l)
 	l2 := log.NewLogger(os.Stdout, log.DEBUG, "CLIENT ")
 	client := initClient("keyJae", l2)
+	defer func() {
+		err := server.Disconnect()
+		if err != nil {
+			server.logger.Error(err)
+		}
+		err = client.Disconnect()
+		if err != nil {
+			client.logger.Error(err)
+		}
+	}()
 	go func() {
-		// CLIENT SIDE
-		// init client
-		// connect
-		// get add code for server connection
-		time.Sleep(1 * time.Second)
 		// *P2P CLIENT*
-		// get add code
-		defer func() {
-			err := client.Disconnect()
-			if err != nil {
-				client.logger.Error(err)
-			}
-		}()
+		time.Sleep(1 * time.Second)
+
 		_ = client.Connect()
 		client.logger.Info(client.conn.LocalAddr())
 		err := client.DoGetAddCode()
@@ -107,30 +107,29 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 		client.logger.Info("server add code: ", server.addCode)
-		time.Sleep(3 * time.Second)
+		time.Sleep(5 * time.Second)
+		client.logger.Info("requesting server pubkey")
 		err = client.DoRequestPubKey(server.addCode, "server.key")
 		if err != nil {
 			client.logger.Error(err)
 		}
+		client.logger.Info("end request Pubkey")
 
 		//client.addContact("jaeha", "choi", []byte("su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="), "server.pub")
 		//client.addContact("robin", "seo", []byte("FBkHZ6e+q4yxaE9TsvPtFbE9HF1vpJP2MnWjvmWWiGI="), "server.pub")
 		client.addContact("duncan", "spani", []byte("GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), "server.key")
 		//client.addContact("duncan2", "spani2", []byte("haGoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), "server.pub")
+		//client.addContact("duncan", "spani", []byte("Wcrk//snVV+2hsNIGwVnrvsu4Txfj2YsbVVYVYTGxr0="), "server.key")
+
 		client.logger.Info("end")
-		time.Sleep(10 * time.Second)
+		time.Sleep(1 * time.Minute)
 	}()
 
 	time.Sleep(1 * time.Second)
 
 	go func() {
 		// *P2P SERVER*
-		defer func() {
-			err := server.Disconnect()
-			if err != nil {
-				server.logger.Error(err)
-			}
-		}()
+
 		err := server.Connect()
 		server.logger.Info(server.conn.LocalAddr())
 		if err != nil {
@@ -152,15 +151,16 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 			server.logger.Error(err)
 		}
 		server.logger.Debug("end pubkey")
-		var key string
+		//var key string
 		////key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
-		key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
+		//key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
 		////key = "haGoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
-		err = server.DoRequestP2P([]byte(key))
-		if err != nil {
-			log.Error(err)
-		}
-		server.logger.Debug("end requestp2p")
+
+		//err = server.DoRequestP2P([]byte(key))
+		//if err != nil {
+		//	log.Error(err)
+		//}
+		//server.logger.Debug("end requestp2p")
 
 		//err = server.DoSendFile("./config.yml")
 		//if err != nil {
@@ -169,7 +169,7 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 		//server.logger.Debug("end sendFile")
 
 		server.logger.Info("end")
-		time.Sleep(5 * time.Second)
+		time.Sleep(1 * time.Minute)
 	}()
 
 	time.Sleep(10 * time.Second)
