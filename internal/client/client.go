@@ -139,6 +139,7 @@ func (client *Client) getResult(command *common.Command) (err error) {
 func (client *Client) commandHandler() {
 	for {
 		msg, err := util.ReadMessage(client.conn)
+		client.logger.Debug(msg.CommandCode, msg.ErrorCode, string(msg.Data))
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -231,9 +232,7 @@ func (client *Client) handleGetPubKey() (err error) {
 	var command = common.RequestPubKey
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer func() {
-		msg := <-client.chanMap[command.String]
 		delete(client.chanMap, command.String)
-		err = common.ErrorCodes[msg.ErrorCode]
 	}()
 	_, err = util.WriteMessage(client.conn, nil, nil, common.Pause)
 	if err != nil {
@@ -247,7 +246,7 @@ func (client *Client) handleGetPubKey() (err error) {
 		return err
 	}
 	client.logger.Debug(n, " bytes written")
-	return err
+	return client.getResult(command)
 }
 
 // DoRequestPubKey signals the relay server to send public key associated with provided Add Code (rxAddCodeStr),
@@ -258,9 +257,11 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
 
+	// write init command to server
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		return err
 	}
+	// write rx add code to server
 	if _, err = util.WriteMessage(client.conn, []byte(rxAddCodeStr), nil, command); err != nil {
 		return err
 	}
@@ -268,12 +269,26 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 	// Get rxPubKeyBytes
 	msg := <-client.chanMap[command.String]
 	// DO NOT CHANGE PERMISSION BITS
-	if err = os.WriteFile(fileName, msg.Data, 0x777); err != nil {
+	f, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+	if err != nil {
+		log.Debug(err)
 		return err
 	}
+	defer f.Close()
+	_, err = f.Write(msg.Data)
+	if err != nil {
+		return err
+	}
+
+	//if err = os.WriteFile(fileName, msg.Data, 0x777); err != nil {
+	//	return err
+	//}
 	//if err = cryptography.BytesToPemFile(msg.Data, fileName); err != nil {
 	//	return err
 	//}
+
+	msg = <-client.chanMap[command.String]
+	client.logger.Debug("in rp2p end: ", string(msg.Data))
 	return client.getResult(command)
 }
 

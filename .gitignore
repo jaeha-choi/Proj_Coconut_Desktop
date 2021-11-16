@@ -1,6 +1,7 @@
 ### Project specific
 *.priv
 *.pub
+*.key
 coverage.txt
 /cmd/coconut_desktop/coconut_desktop
 
