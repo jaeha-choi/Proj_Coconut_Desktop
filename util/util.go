@@ -28,13 +28,6 @@ type Message struct {
 	CommandCode uint8
 }
 
-type MessageUDP struct {
-	Data        []byte
-	ErrorCode   uint8
-	CommandCode uint8
-	SenderAddr  *net.UDPAddr
-}
-
 var EmptyFileName = errors.New("empty filename")
 
 var bufPool = sync.Pool{
@@ -70,24 +63,23 @@ func ReadMessage(reader io.Reader) (msg *Message, err error) {
 	return msg, err
 }
 
-func ReadMessageUDP(reader *net.UDPConn, buffer []byte) (msg *MessageUDP, err error) {
+func ReadMessageUDP(reader *net.UDPConn, buffer []byte) (msg *Message, addr *net.UDPAddr, err error) {
 	// Read packet size
-	_, addr, err := reader.ReadFromUDP(buffer)
+	_, addr, err = reader.ReadFromUDP(buffer)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	size := binary.BigEndian.Uint32(buffer[0:4])
 	errorCode := buffer[4]
 	commandCode := buffer[5]
 
 	// Create new Message
-	msg = &MessageUDP{
+	msg = &Message{
 		Data:        buffer[6 : size+6],
 		ErrorCode:   errorCode,
 		CommandCode: commandCode,
-		SenderAddr:  addr,
 	}
-	return msg, err
+	return msg, addr, err
 }
 
 // WriteMessage write msg to writer. commandToWrite should not be nil
