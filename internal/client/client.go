@@ -156,7 +156,8 @@ func (client *Client) commandHandler() {
 		} else if command == common.HandleRequestP2P {
 			go func() {
 				err = client.HandleRequestP2P()
-				go client.UDPCommandHandler()
+				err = client.UDPCommandHandler()
+				client.Connect()
 			}()
 		} else if command == common.File {
 			go func() {
@@ -171,18 +172,18 @@ func (client *Client) commandHandler() {
 		}
 		if err != nil {
 			client.logger.Debug("command handler error: ", command)
-			client.logger.Debug("command handler error: ", string(msg.Data))
 			client.logger.Error(err)
 		}
 	}
 }
 
-func (client *Client) UDPCommandHandler() {
+func (client *Client) UDPCommandHandler() (err error) {
 	client.logger.Debug("Entering UDP Command Handler")
+	buffer := make([]byte, 4096)
 	for {
-		msg, err := util.ReadMessage(client.peerConn)
-		client.logger.Info("UDP COMMAND HANDLER: ", msg.CommandCode, msg.ErrorCode, string(msg.Data))
-		//client.logger.Debug(string(msg.Data))
+		msg, addr, err := util.ReadMessageUDP(client.peerConn, buffer)
+		client.logger.Info("UDP COMMAND HANDLER: ", msg.CommandCode, " ", msg.ErrorCode, " ", string(msg.Data), " ", addr.String())
+		client.logger.Debug(string(msg.Data))
 		if err != nil {
 			client.logger.Error(err)
 		}
@@ -192,15 +193,15 @@ func (client *Client) UDPCommandHandler() {
 			c <- msg
 		} else if command == common.Quit {
 			log.Info("Returning to Command Handler")
-			return
-		} else if command == common.Init {
-			client.logger.Debug("INIT COMMAND")
-			continue
+			return err
 		} else if command == common.RequestPubKey {
-			err = client.handleGetPubKey()
+			go func() {
+				err = client.handleGetPubKey()
+			}()
 		} else if command == common.File {
-			client.logger.Debug("FILE COMMAND")
-			err = client.HandleGetFile()
+			go func() {
+				err = client.HandleGetFile()
+			}()
 		} else {
 			err = common.UnknownCommandError
 		}
@@ -423,18 +424,14 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 	var command = common.File
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
+	file := filepath.Base(fileName)
 	// setup, encrypt
 	// send init file command
-	_, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("a"), nil, command)
-	_, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("b"), nil, command)
-	_, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("c"), nil, command)
-	_, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("d"), nil, command)
-	_, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("e"), nil, command)
-	if _, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("f"), nil, command); err != nil {
+	if _, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, nil, nil, command); err != nil {
 		client.logger.Error("Error writing to peer")
 		return err
 	}
-	chunk, err := cryptography.EncryptSetup(fileName)
+	chunk, err := cryptography.EncryptSetup(file)
 	if err != nil {
 		client.logger.Error("Error processing file: ", err)
 		return err
