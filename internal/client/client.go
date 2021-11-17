@@ -139,7 +139,6 @@ func (client *Client) getResult(command *common.Command) (err error) {
 func (client *Client) commandHandler() {
 	for {
 		msg, err := util.ReadMessage(client.conn)
-		//client.logger.Debug(msg.CommandCode, msg.ErrorCode, string(msg.Data))
 		if err == io.EOF {
 			break
 		} else if err != nil {
@@ -157,9 +156,11 @@ func (client *Client) commandHandler() {
 		} else if command == common.HandleRequestP2P {
 			go func() {
 				err = client.HandleRequestP2P()
+				go client.UDPCommandHandler()
 			}()
 		} else if command == common.File {
 			go func() {
+				// only handles getting files from server
 				err = client.HandleGetFile()
 			}()
 		} else if command == common.Pause {
@@ -171,6 +172,40 @@ func (client *Client) commandHandler() {
 		if err != nil {
 			client.logger.Debug("command handler error: ", command)
 			client.logger.Debug("command handler error: ", string(msg.Data))
+			client.logger.Error(err)
+		}
+	}
+}
+
+func (client *Client) UDPCommandHandler() {
+	client.logger.Debug("Entering UDP Command Handler")
+	for {
+		msg, err := util.ReadMessage(client.peerConn)
+		client.logger.Info("UDP COMMAND HANDLER: ", msg.CommandCode, msg.ErrorCode, string(msg.Data))
+		//client.logger.Debug(string(msg.Data))
+		if err != nil {
+			client.logger.Error(err)
+		}
+		command := common.CommandCodes[msg.CommandCode]
+		// TODO: Error handling
+		if c, ok := client.chanMap[command.String]; ok {
+			c <- msg
+		} else if command == common.Quit {
+			log.Info("Returning to Command Handler")
+			return
+		} else if command == common.Init {
+			client.logger.Debug("INIT COMMAND")
+			continue
+		} else if command == common.RequestPubKey {
+			err = client.handleGetPubKey()
+		} else if command == common.File {
+			client.logger.Debug("FILE COMMAND")
+			err = client.HandleGetFile()
+		} else {
+			err = common.UnknownCommandError
+		}
+		if err != nil {
+			client.logger.Debug("UDP command handler error: ", command, string(msg.Data))
 			client.logger.Error(err)
 		}
 	}
@@ -266,9 +301,10 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 	if _, err = util.WriteMessage(client.conn, []byte(rxAddCodeStr), nil, command); err != nil {
 		return err
 	}
-
-	// Get rxPubKeyBytes
 	msg := <-client.chanMap[command.String]
+	client.peerKey = string(msg.Data)
+	// Get rxPubKeyBytes
+	msg = <-client.chanMap[command.String]
 	// DO NOT CHANGE PERMISSION BITS
 	f, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
 	if err != nil {
@@ -280,7 +316,7 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 	if err != nil {
 		return err
 	}
-
+	//client.contactMap[client.peerKey].PubKeyFile = fileName
 	//if err = os.WriteFile(fileName, msg.Data, 0x777); err != nil {
 	//	return err
 	//}
@@ -383,17 +419,21 @@ func (client *Client) DoRequestRelay(rxPubKeyHash string) (err error) {
 
 // DoSendFile encrypts and sends the file using the peers public key
 func (client *Client) DoSendFile(fileName string) (err error) {
-	client.logger.Debug("Sending file: ", fileName)
+	client.logger.Debug("Sending file: ", fileName, " to ", client.peerAddr.String())
 	var command = common.File
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
 	// setup, encrypt
-	// send init packet
-	if _, err = util.WriteMessage(client.peerConn, nil, nil, command); err != nil {
-		client.logger.Error("Error writing to server")
+	// send init file command
+	_, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("a"), nil, command)
+	_, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("b"), nil, command)
+	_, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("c"), nil, command)
+	_, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("d"), nil, command)
+	_, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("e"), nil, command)
+	if _, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, []byte("f"), nil, command); err != nil {
+		client.logger.Error("Error writing to peer")
 		return err
 	}
-
 	chunk, err := cryptography.EncryptSetup(fileName)
 	if err != nil {
 		client.logger.Error("Error processing file: ", err)
@@ -402,6 +442,10 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 
 	//get RX pubkey from client stored in contact map
 	//cryptography.OpenPubKey()
+	if client.contactMap[client.peerKey] == nil {
+		return common.ClientNotFoundError
+	}
+	// CONTACT MUST BE IN CONTACT MAP FOR THIS TO WORK
 	pubKey, err := cryptography.OpenPubKey(keyPath, client.contactMap[client.peerKey].PubKeyFile)
 	if err != nil {
 		client.logger.Error(err)
@@ -413,7 +457,7 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 	privKey := client.privKey
 
 	// encrypt and send file
-	err = chunk.Encrypt(client.peerConn, pubKey, privKey)
+	err = chunk.EncryptUDP(client.peerConn, client.peerAddr, pubKey, privKey)
 	if err != nil {
 		client.logger.Error("Error encrypting file")
 		return err
@@ -573,7 +617,7 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 		return err
 	}
 
-	client.logger.Info("Peer local Addr: ", local, ", Peer public Addr: ", remote)
+	client.logger.Info("Peer public Address: ", remote)
 
 	// Resolve local address
 	lAddr, err := net.ResolveUDPAddr("udp", lAddrString)

@@ -23,7 +23,6 @@ func initClient(keyN string, log *log.Logger) Client {
 	if err != nil {
 		log.Error(err)
 	}
-	log.Info(pubBlock)
 	client.pubKeyBlock = pubBlock
 	client.privKey = privBlock
 	return *client
@@ -115,11 +114,11 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 		}
 		client.logger.Info("end request Pubkey")
 
-		//client.addContact("jaeha", "choi", []byte("su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="), "server.pub")
-		//client.addContact("robin", "seo", []byte("FBkHZ6e+q4yxaE9TsvPtFbE9HF1vpJP2MnWjvmWWiGI="), "server.pub")
+		client.addContact("jaeha", "choi", []byte("su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="), "server.pub")
+		client.addContact("robin", "seo", []byte("FBkHZ6e+q4yxaE9TsvPtFbE9HF1vpJP2MnWjvmWWiGI="), "server.pub")
 		client.addContact("duncan", "spani", []byte("GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), "server.key")
-		//client.addContact("duncan2", "spani2", []byte("haGoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), "server.pub")
-		//client.addContact("duncan", "spani", []byte("Wcrk//snVV+2hsNIGwVnrvsu4Txfj2YsbVVYVYTGxr0="), "server.key")
+		client.addContact("duncan2", "spani2", []byte("haGoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), "server.pub")
+		client.addContact("duncan", "spani", []byte("Wcrk//snVV+2hsNIGwVnrvsu4Txfj2YsbVVYVYTGxr0="), "server.key")
 
 		client.logger.Info("end")
 		time.Sleep(1 * time.Minute)
@@ -151,28 +150,29 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 			server.logger.Error(err)
 		}
 		server.logger.Debug("end pubkey")
-		//var key string
-		////key = "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
-		//key = "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
-		////key = "haGoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
-
-		//err = server.DoRequestP2P([]byte(key))
-		//if err != nil {
-		//	log.Error(err)
-		//}
-		//server.logger.Debug("end requestp2p")
-
-		//err = server.DoSendFile("./config.yml")
-		//if err != nil {
-		//	return
-		//}
-		//server.logger.Debug("end sendFile")
-
+		time.Sleep(10 * time.Second)
+		////key := "giapph/kXJ7PAHfMzWeE8hoqgQ0nirjjo0TAOElS598=" // robin
+		////key := "haGoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U=" // duncan
+		key := "su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4=" // jaeha
+		server.addContact("jaeha", "choi", []byte("su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="), "client.key")
+		server.logger.Debug("Starting request p2p")
+		err = server.DoRequestP2P([]byte(key))
+		if err != nil {
+			log.Error(err)
+		}
+		server.logger.Debug("end requestp2p")
+		time.Sleep(1 * time.Second)
+		server.logger.Debug("Starting send file")
+		err = server.DoSendFile("/home/duncan/Downloads/abc.txt")
+		if err != nil {
+			return
+		}
+		server.logger.Debug("end sendFile")
 		server.logger.Info("end")
 		time.Sleep(1 * time.Minute)
 	}()
 
-	time.Sleep(10 * time.Second)
+	time.Sleep(1 * time.Minute)
 
 }
 
