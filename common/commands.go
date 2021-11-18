@@ -18,6 +18,7 @@ var CommandCodes = [256]*Command{
 	RequestP2P,
 	File,
 	Pause,
+	Okay,
 }
 
 var Init = &Command{
@@ -73,4 +74,9 @@ var File = &Command{
 var Pause = &Command{
 	String: "PAUS",
 	Code:   11,
+}
+
+var Okay = &Command{
+	String: "OKAY",
+	Code:   12,
 }

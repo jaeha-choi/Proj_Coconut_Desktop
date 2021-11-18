@@ -28,6 +28,14 @@ type Message struct {
 	CommandCode uint8
 }
 
+type UDPMessage struct {
+	Data        []byte
+	ErrorCode   uint8
+	CommandCode uint8
+	Sequence    uint32
+	Size        uint32
+}
+
 var EmptyFileName = errors.New("empty filename")
 
 var bufPool = sync.Pool{
@@ -63,23 +71,113 @@ func ReadMessage(reader io.Reader) (msg *Message, err error) {
 	return msg, err
 }
 
-func ReadMessageUDP(reader *net.UDPConn, buffer []byte) (msg *Message, addr *net.UDPAddr, err error) {
-	// Read packet size
-	_, addr, err = reader.ReadFromUDP(buffer)
-	if err != nil {
-		return nil, nil, err
-	}
-	size := binary.BigEndian.Uint32(buffer[0:4])
-	errorCode := buffer[4]
-	commandCode := buffer[5]
-
-	// Create new Message
-	msg = &Message{
-		Data:        buffer[6 : size+6],
+func ReadMessageUDP(reader *net.UDPConn) (msg *Message, addr *net.UDPAddr, err error) {
+	var packets []*UDPMessage
+	buffer := make([]byte, 4096)
+	n, addr, err := reader.ReadFromUDP(buffer)
+	sequence := binary.BigEndian.Uint32(buffer[0:4])
+	size := binary.BigEndian.Uint32(buffer[4:8])
+	errorCode := buffer[8]
+	commandCode := buffer[9]
+	data := buffer[9:n]
+	message := &UDPMessage{
+		Sequence:    sequence,
+		Size:        size,
 		ErrorCode:   errorCode,
 		CommandCode: commandCode,
+		Data:        data,
 	}
-	return msg, addr, err
+	packets[message.Sequence] = message
+	returnMessage := &Message{
+		Data:        nil,
+		ErrorCode:   0,
+		CommandCode: 0,
+	}
+	// read from UDP until all packets are allocated
+	for {
+		if uint32(len(packets)) == size-1 {
+			_, err2 := WriteMessageUDP(reader, addr, nil, nil, common.Okay)
+			if err2 != nil {
+				return nil, nil, err2
+			}
+			break
+		}
+
+		n, addr, err = reader.ReadFromUDP(buffer)
+		message := &UDPMessage{
+			Sequence:    binary.BigEndian.Uint32(buffer[0:4]),
+			Size:        binary.BigEndian.Uint32(buffer[4:8]),
+			ErrorCode:   buffer[8],
+			CommandCode: buffer[9],
+			Data:        buffer[9:n],
+		}
+		packets[message.Sequence] = message
+	}
+
+	for i := range packets {
+		if packets[i].Sequence == 0 {
+			continue
+		}
+		if packets[i].CommandCode != returnMessage.CommandCode {
+			returnMessage.CommandCode = packets[i].CommandCode
+		}
+		if packets[i].ErrorCode != returnMessage.ErrorCode {
+			returnMessage.ErrorCode = packets[i].ErrorCode
+		}
+		msg.Data = append(msg.Data, packets[i].Data...)
+	}
+	// Read packet size
+	//buffer := make([]byte, 3)
+	//n, addr, err := reader.ReadFromUDP(buffer)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//log.Debug(n, buffer[:n])
+	//
+	//buffer2 := make([]byte, 3)
+	//m, addr, err := reader.ReadFromUDP(buffer2)
+	//if err != nil {
+	//	return nil, nil, err
+	//}
+	//log.Debug(m, buffer[:m])
+
+	return returnMessage, addr, err
+	//size := binary.BigEndian.Uint32(buffer[0:4])
+	//log.Debug("SIZE: ", size)
+	//errorCode := buffer[4]
+	//commandCode := buffer[5]
+
+	//log.Debug(buffer[:n])
+	//if size == 0{ // if no data
+	//	msg = &Message{
+	//		Data:        nil,
+	//		ErrorCode:   errorCode,
+	//		CommandCode: commandCode,
+	//	}
+	//	log.Debug("data: ", msg.Data)
+	//	return msg, addr, err
+	//} else if size > 0  && size < 256{ // if small data
+	//	msg = &Message{
+	//		Data:        buffer[6:size+6],
+	//		ErrorCode:   errorCode,
+	//		CommandCode: commandCode,
+	//	}
+	//	log.Debug("data: ", msg.Data)
+	//	return msg, addr, err
+	//} else { // if large data
+	//	buffer2 := make([]byte, size - 4096)
+	//	log.Debug(len(buffer2))
+	//	m, _, err := reader.ReadFromUDP(buffer2)
+	//	log.Debug("end read")
+	//	msg = &Message{
+	//		Data:        append(buffer[6:size+6], buffer2[m]),
+	//		ErrorCode:   errorCode,
+	//		CommandCode: commandCode,
+	//	}
+	//	log.Debug("buffer: ", buffer2[:m])
+	//	log.Debug("data: ", msg.Data)
+	//	return msg, addr, err
+	//}
 }
 
 // WriteMessage write msg to writer. commandToWrite should not be nil
