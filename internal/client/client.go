@@ -157,7 +157,10 @@ func (client *Client) commandHandler() {
 			go func() {
 				err = client.HandleRequestP2P()
 				err = client.UDPCommandHandler()
-				client.Connect()
+				err = client.Connect()
+				if err != nil {
+					client.logger.Error("Failed to reconnect to Server")
+				}
 			}()
 		} else if command == common.File {
 			go func() {
@@ -179,11 +182,12 @@ func (client *Client) commandHandler() {
 
 func (client *Client) UDPCommandHandler() (err error) {
 	client.logger.Debug("Entering UDP Command Handler")
-	buffer := make([]byte, 4096)
+	//buffer := make([]byte, 4096)
 	for {
-		msg, addr, err := util.ReadMessageUDP(client.peerConn, buffer)
-		client.logger.Info("UDP COMMAND HANDLER: ", msg.CommandCode, " ", msg.ErrorCode, " ", string(msg.Data), " ", addr.String())
-		client.logger.Debug(string(msg.Data))
+		msg, addr, err := util.ReadMessageUDP(client.peerConn)
+		// Clear Buffer
+		//buffer = make([]byte, 4096)
+		client.logger.Info("UDP COMMAND HANDLER: ", msg.CommandCode, " ", msg.ErrorCode, " ", msg.Data, " ", addr.String())
 		if err != nil {
 			client.logger.Error(err)
 		}
@@ -424,14 +428,12 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 	var command = common.File
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
-	file := filepath.Base(fileName)
-	// setup, encrypt
-	// send init file command
+
 	if _, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, nil, nil, command); err != nil {
 		client.logger.Error("Error writing to peer")
 		return err
 	}
-	chunk, err := cryptography.EncryptSetup(file)
+	chunk, err := cryptography.EncryptSetup(fileName)
 	if err != nil {
 		client.logger.Error("Error processing file: ", err)
 		return err
@@ -474,7 +476,6 @@ func (client *Client) HandleGetFile() (err error) {
 		client.logger.Error("Error setting up decryption")
 		return err
 	}
-
 	//get RX pubkey from client stored in contact map
 	//cryptography.OpenPubKey()
 	pubKey, err := cryptography.OpenPubKey(keyPath, client.contactMap[client.peerKey].PubKeyFile)
@@ -633,54 +634,6 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 	return err
 
 }
-
-// Reading
-// **TX**
-//go func() {
-//	n, err := conn.Read(buffer)
-//	if err != nil {
-//		client.logger.Debug(err)
-//	}
-//	fmt.Println(string(buffer[:n]))
-//	if err != nil {
-//		return
-//	}
-//}()
-
-// **RX**
-//go func() {
-//	client.logger.Debug("Reading file")
-//	file, _ := os.OpenFile("checksum.txt", os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
-//	defer file.Close()
-//	n, err := conn.Read(buffer)
-//	if err != nil {
-//		client.logger.Debug(err)
-//	}
-//	_, _ = file.Write(buffer[:n])
-//	if err != nil {
-//		return
-//	}
-//}()
-// Writing
-// **TX**
-//file, _ := ioutil.ReadFile("checksum.txt")
-//for {
-//	_, err := conn.WriteTo(file,  addr)
-//	if err != nil {
-//		client.logger.Debug(err)
-//		return err
-//	}
-//	time.Sleep(5 * time.Second)
-//}
-// **RX**
-//for {
-//	_, err := conn.WriteTo([]byte("hello"), addr)
-//	if err != nil {
-//		client.logger.Debug(err)
-//		return err
-//	}
-//	time.Sleep(5 * time.Second)
-//}
 
 // ReadContactsFile read the contents of contacts.gob into client.contactMap
 func (client *Client) ReadContactsFile() (err error) {
