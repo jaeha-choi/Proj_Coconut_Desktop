@@ -9,10 +9,12 @@ import (
 	"gopkg.in/yaml.v3"
 	"io"
 	"io/ioutil"
+	"math"
 	"net"
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 const (
@@ -71,114 +73,137 @@ func ReadMessage(reader io.Reader) (msg *Message, err error) {
 	return msg, err
 }
 
-func ReadMessageUDP(reader *net.UDPConn) (msg *Message, addr *net.UDPAddr, err error) {
-	var packets []*UDPMessage
-	buffer := make([]byte, 4096)
-	n, addr, err := reader.ReadFromUDP(buffer)
-	sequence := binary.BigEndian.Uint32(buffer[0:4])
-	size := binary.BigEndian.Uint32(buffer[4:8])
-	errorCode := buffer[8]
-	commandCode := buffer[9]
-	data := buffer[9:n]
-	message := &UDPMessage{
-		Sequence:    sequence,
-		Size:        size,
+func ReadMessageUDP(reader *net.UDPConn, buffer []byte) (msg *Message, addr *net.UDPAddr, err error) {
+	// Read packet size
+	_, addr, err = reader.ReadFromUDP(buffer)
+	if err != nil {
+		return nil, nil, err
+	}
+	size := binary.BigEndian.Uint32(buffer[0:4])
+	errorCode := buffer[4]
+	commandCode := buffer[5]
+
+	// Create new Message
+	msg = &Message{
+		Data:        buffer[6 : size+6],
 		ErrorCode:   errorCode,
 		CommandCode: commandCode,
-		Data:        data,
 	}
-	packets[message.Sequence] = message
-	returnMessage := &Message{
-		Data:        nil,
-		ErrorCode:   0,
-		CommandCode: 0,
-	}
-	// read from UDP until all packets are allocated
-	for {
-		if uint32(len(packets)) == size-1 {
-			_, err2 := WriteMessageUDP(reader, addr, nil, nil, common.Okay)
-			if err2 != nil {
-				return nil, nil, err2
-			}
-			break
-		}
-
-		n, addr, err = reader.ReadFromUDP(buffer)
-		message := &UDPMessage{
-			Sequence:    binary.BigEndian.Uint32(buffer[0:4]),
-			Size:        binary.BigEndian.Uint32(buffer[4:8]),
-			ErrorCode:   buffer[8],
-			CommandCode: buffer[9],
-			Data:        buffer[9:n],
-		}
-		packets[message.Sequence] = message
-	}
-
-	for i := range packets {
-		if packets[i].Sequence == 0 {
-			continue
-		}
-		if packets[i].CommandCode != returnMessage.CommandCode {
-			returnMessage.CommandCode = packets[i].CommandCode
-		}
-		if packets[i].ErrorCode != returnMessage.ErrorCode {
-			returnMessage.ErrorCode = packets[i].ErrorCode
-		}
-		msg.Data = append(msg.Data, packets[i].Data...)
-	}
-	// Read packet size
-	//buffer := make([]byte, 3)
-	//n, addr, err := reader.ReadFromUDP(buffer)
-	//if err != nil {
-	//	return nil, nil, err
-	//}
-	//log.Debug(n, buffer[:n])
-	//
-	//buffer2 := make([]byte, 3)
-	//m, addr, err := reader.ReadFromUDP(buffer2)
-	//if err != nil {
-	//	return nil, nil, err
-	//}
-	//log.Debug(m, buffer[:m])
-
-	return returnMessage, addr, err
-	//size := binary.BigEndian.Uint32(buffer[0:4])
-	//log.Debug("SIZE: ", size)
-	//errorCode := buffer[4]
-	//commandCode := buffer[5]
-
-	//log.Debug(buffer[:n])
-	//if size == 0{ // if no data
-	//	msg = &Message{
-	//		Data:        nil,
-	//		ErrorCode:   errorCode,
-	//		CommandCode: commandCode,
-	//	}
-	//	log.Debug("data: ", msg.Data)
-	//	return msg, addr, err
-	//} else if size > 0  && size < 256{ // if small data
-	//	msg = &Message{
-	//		Data:        buffer[6:size+6],
-	//		ErrorCode:   errorCode,
-	//		CommandCode: commandCode,
-	//	}
-	//	log.Debug("data: ", msg.Data)
-	//	return msg, addr, err
-	//} else { // if large data
-	//	buffer2 := make([]byte, size - 4096)
-	//	log.Debug(len(buffer2))
-	//	m, _, err := reader.ReadFromUDP(buffer2)
-	//	log.Debug("end read")
-	//	msg = &Message{
-	//		Data:        append(buffer[6:size+6], buffer2[m]),
-	//		ErrorCode:   errorCode,
-	//		CommandCode: commandCode,
-	//	}
-	//	log.Debug("buffer: ", buffer2[:m])
-	//	log.Debug("data: ", msg.Data)
-	//	return msg, addr, err
-	//}
+	return msg, addr, err
 }
+
+//func ReadFileUDP(reader *net.UDPConn)(msg *Message, addr *net.UDPAddr, err error){
+//
+//}
+
+//func ReadMessageUDP(reader *net.UDPConn) (msg *Message, addr *net.UDPAddr, err error) {
+//	var packets []*UDPMessage
+//	buffer := make([]byte, 4096)
+//	n, addr, err := reader.ReadFromUDP(buffer)
+//	sequence := binary.BigEndian.Uint32(buffer[0:4])
+//	size := binary.BigEndian.Uint32(buffer[4:8])
+//	errorCode := buffer[8]
+//	commandCode := buffer[9]
+//	data := buffer[9:n]
+//	message := &UDPMessage{
+//		Sequence:    sequence,
+//		Size:        size,
+//		ErrorCode:   errorCode,
+//		CommandCode: commandCode,
+//		Data:        data,
+//	}
+//	packets[message.Sequence] = message
+//	returnMessage := &Message{
+//		Data:        nil,
+//		ErrorCode:   0,
+//		CommandCode: 0,
+//	}
+//	// read from UDP until all packets are allocated
+//	for {
+//		if uint32(len(packets)) == size-1 {
+//			_, err2 := WriteMessageUDP(reader, addr, nil, nil, nil)
+//			if err2 != nil {
+//				return nil, nil, err2
+//			}
+//			break
+//		}
+//
+//		n, addr, err = reader.ReadFromUDP(buffer)
+//		message := &UDPMessage{
+//			Sequence:    binary.BigEndian.Uint32(buffer[0:4]),
+//			Size:        binary.BigEndian.Uint32(buffer[4:8]),
+//			ErrorCode:   buffer[8],
+//			CommandCode: buffer[9],
+//			Data:        buffer[9:n],
+//		}
+//		packets[message.Sequence] = message
+//	}
+//
+//	for i := range packets {
+//		if packets[i].Sequence == 0 {
+//			continue
+//		}
+//		if packets[i].CommandCode != returnMessage.CommandCode {
+//			returnMessage.CommandCode = packets[i].CommandCode
+//		}
+//		if packets[i].ErrorCode != returnMessage.ErrorCode {
+//			returnMessage.ErrorCode = packets[i].ErrorCode
+//		}
+//		msg.Data = append(msg.Data, packets[i].Data...)
+//	}
+//	// Read packet size
+//	//buffer := make([]byte, 3)
+//	//n, addr, err := reader.ReadFromUDP(buffer)
+//	//if err != nil {
+//	//	return nil, nil, err
+//	//}
+//	//log.Debug(n, buffer[:n])
+//	//
+//	//buffer2 := make([]byte, 3)
+//	//m, addr, err := reader.ReadFromUDP(buffer2)
+//	//if err != nil {
+//	//	return nil, nil, err
+//	//}
+//	//log.Debug(m, buffer[:m])
+//
+//	return returnMessage, addr, err
+//	//size := binary.BigEndian.Uint32(buffer[0:4])
+//	//log.Debug("SIZE: ", size)
+//	//errorCode := buffer[4]
+//	//commandCode := buffer[5]
+//
+//	//log.Debug(buffer[:n])
+//	//if size == 0{ // if no data
+//	//	msg = &Message{
+//	//		Data:        nil,
+//	//		ErrorCode:   errorCode,
+//	//		CommandCode: commandCode,
+//	//	}
+//	//	log.Debug("data: ", msg.Data)
+//	//	return msg, addr, err
+//	//} else if size > 0  && size < 256{ // if small data
+//	//	msg = &Message{
+//	//		Data:        buffer[6:size+6],
+//	//		ErrorCode:   errorCode,
+//	//		CommandCode: commandCode,
+//	//	}
+//	//	log.Debug("data: ", msg.Data)
+//	//	return msg, addr, err
+//	//} else { // if large data
+//	//	buffer2 := make([]byte, size - 4096)
+//	//	log.Debug(len(buffer2))
+//	//	m, _, err := reader.ReadFromUDP(buffer2)
+//	//	log.Debug("end read")
+//	//	msg = &Message{
+//	//		Data:        append(buffer[6:size+6], buffer2[m]),
+//	//		ErrorCode:   errorCode,
+//	//		CommandCode: commandCode,
+//	//	}
+//	//	log.Debug("buffer: ", buffer2[:m])
+//	//	log.Debug("data: ", msg.Data)
+//	//	return msg, addr, err
+//	//}
+//}
 
 // WriteMessage write msg to writer. commandToWrite should not be nil
 // Returns int indicating the number of bytes written, and error, if any.
@@ -254,6 +279,98 @@ func WriteMessageUDP(writer *net.UDPConn, address *net.UDPAddr, b []byte, errorT
 		return writtenSize, err
 	}
 	return writtenSize, err
+}
+
+// WriteFileUDP writes a file stored in b to UDP Address
+// File is divided into multiple parts if file is too larges and acknowledgment
+// packets are expected from receiver
+// Due to WriteFileUDP using writer as both a writer and a reader,
+// command handler must be paused before call to function
+func WriteFileUDP(writer *net.UDPConn, reader *net.UDPAddr, b []byte, errorToWrite *common.Error, commandToWrite *common.Command) (n int, err error) {
+	// get number of packets to be sent
+	packets := make(map[uint32][]byte)
+	t := float64(len(b)) / float64(BufferSize-10)
+	totalPackets := uint32(math.Ceil(t))
+	total := make([]byte, 4)
+	binary.BigEndian.PutUint32(total, totalPackets)
+	// create general buffer with hardcoded error and command
+	// create genera header
+	// bytes 0:4 : sequence number
+	// bytes 4:8 : totalPackets
+	// byte 8	 : error code
+	var errCode uint8 = 0
+	if errorToWrite != nil {
+		errCode = errorToWrite.ErrCode
+	}
+	var commandCode uint8 = 0
+	if commandToWrite != nil {
+		commandCode = commandToWrite.Code
+	}
+	// byte 9	 : command code
+	header := make([]byte, 10)
+	// set start and end point for data to be sent excluding 10 bytes for header
+	var bufferStart = 0
+	var bufferEnd = 4086
+	var i uint32 = 0
+	// write all packets to writer
+	for i < totalPackets {
+		if bufferStart+4086 >= len(b) {
+			bufferEnd = len(b)
+		}
+		binary.BigEndian.PutUint32(header[0:4], i)
+		binary.BigEndian.PutUint32(header[4:8], totalPackets)
+		header[8] = errCode
+		header[9] = commandCode
+		buffer := append(header, b[bufferStart:bufferEnd]...)
+		bufferStart += 4086
+		_, err := writer.WriteTo(buffer, reader)
+		if err != nil {
+			log.Error("Error writing file peer")
+			return int(i), err
+		}
+		packets[i] = buffer
+		i++
+	}
+
+	acksReceived := make(map[uint32]bool)
+	var index uint32
+	timeouts := 0
+	for {
+		// set deadline to allow for up to 10 seconds for a response
+		err := writer.SetReadDeadline(time.Now().Add(3 * time.Second))
+		if err != nil {
+			return 0, err
+		}
+		ackBuffer := make([]byte, 10)
+		// read acknowledgements into buffer
+		// (packets should contain no data, thus only a 10 byte header)
+		_, addr, err := writer.ReadFromUDP(ackBuffer)
+		if err != nil {
+			log.Error(err)
+			timeouts += 1
+			if timeouts > 2 {
+				return 0, common.TimeoutError
+			}
+			// if timeout occurs, rewrite all unacknowledged packets back to peer
+			var j uint32 = 0
+			for j < totalPackets {
+				if _, ok := acksReceived[j]; !ok {
+					_, err = writer.WriteTo(packets[j], reader)
+				}
+				j++
+			}
+		}
+		// if received address does not match sent address, do nothing
+		if addr.String() != reader.String() {
+			continue
+		}
+		// log receiving of acknowledgment packet
+		index = binary.BigEndian.Uint32(ackBuffer[0:4])
+		acksReceived[index] = true
+		if uint32(len(acksReceived)) == totalPackets {
+			return int(totalPackets), nil
+		}
+	}
 }
 
 // readSize reads first 4 bytes from the reader and convert them into a uint32 value

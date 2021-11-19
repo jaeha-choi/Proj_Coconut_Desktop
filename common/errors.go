@@ -36,6 +36,7 @@ var ErrorCodes = [256]*Error{
 	PeerUnavailableError,
 	PubKeyNotFoundError,
 	ClosedConnError,
+	TimeoutError,
 }
 
 var UnknownCodeError = &Error{
@@ -106,4 +107,9 @@ var PubKeyNotFoundError = &Error{
 var ClosedConnError = &Error{
 	Err:     errors.New("connection was closed by peer"),
 	ErrCode: 14,
+}
+
+var TimeoutError = &Error{
+	Err:     errors.New("connection timed out "),
+	ErrCode: 15,
 }

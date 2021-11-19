@@ -6,13 +6,16 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"fmt"
+	"github.com/jaeha-choi/Proj_Coconut_Utility/common"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func init() {
@@ -1234,4 +1237,66 @@ func BenchmarkReadBytesTemp(b *testing.B) {
 			return
 		}
 	}
+}
+
+func TestWriteFileUDP(t *testing.T) {
+	addr := "127.0.0.1:12345"
+	addr2 := "127.0.0.1:54321"
+	address, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		t.Error(err)
+	}
+	address2, err := net.ResolveUDPAddr("udp", addr2)
+	if err != nil {
+		t.Error(err)
+	}
+	UDPconn, err := net.ListenUDP("udp", address)
+	if err != nil {
+		t.Error(err)
+	}
+	UDPconn2, err := net.ListenUDP("udp", address2)
+	if err != nil {
+		t.Error(err)
+	}
+	b, err := ioutil.ReadFile("/home/duncan/Downloads/abc.txt") // b has type []byte
+	if err != nil {
+		t.Error(err)
+	}
+	log.Info(len(b))
+	log.Info(b)
+	go func() {
+		n, err := WriteFileUDP(UDPconn, address2, b, common.TimeoutError, common.File)
+		log.Debug("TOTAL SENT: ", n)
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+	time.Sleep(1 * time.Second)
+	go func() {
+		returnVal := []byte{0, 0, 0, 0, 0, 0, 0, 2, 0, 0}
+		buffer := make([]byte, BufferSize)
+		_, _, err := UDPconn2.ReadFromUDP(buffer)
+		if err != nil {
+			t.Error(err)
+			panic(err)
+		}
+		packetNum := binary.BigEndian.Uint32(buffer[0:4])
+		binary.BigEndian.PutUint32(returnVal[0:4], packetNum)
+		UDPconn2.WriteTo(returnVal, address)
+		total := binary.BigEndian.Uint32(buffer[4:8])
+		i := uint32(1)
+		for i < total {
+			_, _, err := UDPconn2.ReadFromUDP(buffer)
+			if err != nil {
+				t.Error(err)
+			}
+			packetNum := binary.BigEndian.Uint32(buffer[0:4])
+			binary.BigEndian.PutUint32(returnVal[0:4], packetNum)
+			UDPconn2.WriteTo(returnVal, address)
+			i++
+		}
+		log.Debug("TOTAL RECEIVED: ", i)
+	}()
+
+	time.Sleep(1 * time.Minute)
 }
