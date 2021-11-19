@@ -92,118 +92,114 @@ func ReadMessageUDP(reader *net.UDPConn, buffer []byte) (msg *Message, addr *net
 	return msg, addr, err
 }
 
-//func ReadFileUDP(reader *net.UDPConn)(msg *Message, addr *net.UDPAddr, err error){
-//
-//}
+func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, addr *net.UDPAddr, err error) {
+	// verify filename does not include path
+	fileName = filepath.Base(fileName)
+	// set timeout deadline to 10 seconds
+	err = reader.SetReadDeadline(time.Now().Add(20 * time.Second))
+	if err != nil {
+		log.Error("Error setting up read deadline")
+		return nil, 0, nil, err
+	}
+	packets := make(map[uint32][]byte)
+	ackBuffer := make([]byte, 10)
+	buffer := make([]byte, BufferSize)
+	ackMap := make(map[uint32]bool)
 
-//func ReadMessageUDP(reader *net.UDPConn) (msg *Message, addr *net.UDPAddr, err error) {
-//	var packets []*UDPMessage
-//	buffer := make([]byte, 4096)
-//	n, addr, err := reader.ReadFromUDP(buffer)
-//	sequence := binary.BigEndian.Uint32(buffer[0:4])
-//	size := binary.BigEndian.Uint32(buffer[4:8])
-//	errorCode := buffer[8]
-//	commandCode := buffer[9]
-//	data := buffer[9:n]
-//	message := &UDPMessage{
-//		Sequence:    sequence,
-//		Size:        size,
-//		ErrorCode:   errorCode,
-//		CommandCode: commandCode,
-//		Data:        data,
-//	}
-//	packets[message.Sequence] = message
-//	returnMessage := &Message{
-//		Data:        nil,
-//		ErrorCode:   0,
-//		CommandCode: 0,
-//	}
-//	// read from UDP until all packets are allocated
-//	for {
-//		if uint32(len(packets)) == size-1 {
-//			_, err2 := WriteMessageUDP(reader, addr, nil, nil, nil)
-//			if err2 != nil {
-//				return nil, nil, err2
-//			}
-//			break
-//		}
-//
-//		n, addr, err = reader.ReadFromUDP(buffer)
-//		message := &UDPMessage{
-//			Sequence:    binary.BigEndian.Uint32(buffer[0:4]),
-//			Size:        binary.BigEndian.Uint32(buffer[4:8]),
-//			ErrorCode:   buffer[8],
-//			CommandCode: buffer[9],
-//			Data:        buffer[9:n],
-//		}
-//		packets[message.Sequence] = message
-//	}
-//
-//	for i := range packets {
-//		if packets[i].Sequence == 0 {
-//			continue
-//		}
-//		if packets[i].CommandCode != returnMessage.CommandCode {
-//			returnMessage.CommandCode = packets[i].CommandCode
-//		}
-//		if packets[i].ErrorCode != returnMessage.ErrorCode {
-//			returnMessage.ErrorCode = packets[i].ErrorCode
-//		}
-//		msg.Data = append(msg.Data, packets[i].Data...)
-//	}
-//	// Read packet size
-//	//buffer := make([]byte, 3)
-//	//n, addr, err := reader.ReadFromUDP(buffer)
-//	//if err != nil {
-//	//	return nil, nil, err
-//	//}
-//	//log.Debug(n, buffer[:n])
-//	//
-//	//buffer2 := make([]byte, 3)
-//	//m, addr, err := reader.ReadFromUDP(buffer2)
-//	//if err != nil {
-//	//	return nil, nil, err
-//	//}
-//	//log.Debug(m, buffer[:m])
-//
-//	return returnMessage, addr, err
-//	//size := binary.BigEndian.Uint32(buffer[0:4])
-//	//log.Debug("SIZE: ", size)
-//	//errorCode := buffer[4]
-//	//commandCode := buffer[5]
-//
-//	//log.Debug(buffer[:n])
-//	//if size == 0{ // if no data
-//	//	msg = &Message{
-//	//		Data:        nil,
-//	//		ErrorCode:   errorCode,
-//	//		CommandCode: commandCode,
-//	//	}
-//	//	log.Debug("data: ", msg.Data)
-//	//	return msg, addr, err
-//	//} else if size > 0  && size < 256{ // if small data
-//	//	msg = &Message{
-//	//		Data:        buffer[6:size+6],
-//	//		ErrorCode:   errorCode,
-//	//		CommandCode: commandCode,
-//	//	}
-//	//	log.Debug("data: ", msg.Data)
-//	//	return msg, addr, err
-//	//} else { // if large data
-//	//	buffer2 := make([]byte, size - 4096)
-//	//	log.Debug(len(buffer2))
-//	//	m, _, err := reader.ReadFromUDP(buffer2)
-//	//	log.Debug("end read")
-//	//	msg = &Message{
-//	//		Data:        append(buffer[6:size+6], buffer2[m]),
-//	//		ErrorCode:   errorCode,
-//	//		CommandCode: commandCode,
-//	//	}
-//	//	log.Debug("buffer: ", buffer2[:m])
-//	//	log.Debug("data: ", msg.Data)
-//	//	return msg, addr, err
-//	//}
-//}
+	// read first packet
+	n, addr, err = reader.ReadFromUDP(buffer)
+	if err != nil {
+		log.Error("Error reading from peer")
+		return nil, 0, nil, err
+	}
+	// get sequence number
+	packetNum := binary.BigEndian.Uint32(buffer[0:4])
+	// add packet to packet map
+	packets[packetNum] = buffer[10:n]
+	// write sequence number to acknowledgment header
+	binary.BigEndian.PutUint32(ackBuffer[0:4], packetNum)
+	// get number of total packets
+	total := binary.BigEndian.Uint32(buffer[4:8])
+	// write total number to acknowledgment header
+	binary.BigEndian.PutUint32(ackBuffer[4:8], total)
+	// preserver error and command codes
+	ackBuffer[8] = buffer[8]
+	ackBuffer[9] = buffer[9]
+	// set acknowledgment number to true
+	ackMap[packetNum] = true
+	// write acknowledgment back to peer
+	_, err = reader.WriteTo(ackBuffer, addr)
+	if err != nil {
+		log.Error("Error writing to peer")
+		return nil, 0, nil, err
+	}
+	i := uint32(1)
+	for uint32(len(ackMap)) < total {
+		buffer := make([]byte, BufferSize)
+		err = reader.SetReadDeadline(time.Now().Add(20 * time.Second))
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		// read next packet from peer
+		n, _, err := reader.ReadFromUDP(buffer)
+		if err != nil {
+			log.Error(err)
+			log.Error("Error reading from peer")
+			return nil, 0, nil, common.TimeoutError
+		}
+		// 	Preserve Header
+		// get sequence number
+		packetNum := binary.BigEndian.Uint32(buffer[0:4])
+		// add packet to packet map
+		packets[packetNum] = buffer[10:n]
+		// write sequence number to acknowledgment header
+		binary.BigEndian.PutUint32(ackBuffer[0:4], packetNum)
+		// get number of total packets
+		total := binary.BigEndian.Uint32(buffer[4:8])
+		// write total number to acknowledgment header
+		binary.BigEndian.PutUint32(ackBuffer[4:8], total)
+		// preserver error and command codes
+		ackBuffer[8] = buffer[8]
+		ackBuffer[9] = buffer[9]
+		// set acknowledgment number to true
+		ackMap[packetNum] = true
+		_, err = reader.WriteTo(ackBuffer, addr)
+		if err != nil {
+			log.Error("Error writing to peer")
+			return nil, 0, nil, err
+		}
+		err = reader.SetReadDeadline(time.Now().Add(10 * time.Second))
+		if err != nil {
+			log.Error("Error setting up read deadline")
+			return nil, 0, nil, err
+		}
+		i++
+	}
+	// make sure all packets were received
+	i = 0
+	for i < total {
+		if !ackMap[i] {
+			log.Error("Packet ", i, " missing")
+			return nil, 0, nil, common.TaskNotCompleteError
+		}
+		i++
+	}
+	// open file to write
+	file, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+	if err != nil {
+		log.Error(err)
+	}
+	// write packets in order
+	i = 0
+	for i < total {
+		_, err := file.Write(packets[i])
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		i++
+	}
+	return file, int(i), addr, err
+}
 
 // WriteMessage write msg to writer. commandToWrite should not be nil
 // Returns int indicating the number of bytes written, and error, if any.
@@ -323,6 +319,7 @@ func WriteFileUDP(writer *net.UDPConn, reader *net.UDPAddr, b []byte, errorToWri
 		header[9] = commandCode
 		buffer := append(header, b[bufferStart:bufferEnd]...)
 		bufferStart += 4086
+		bufferEnd += 4086
 		_, err := writer.WriteTo(buffer, reader)
 		if err != nil {
 			log.Error("Error writing file peer")
@@ -337,19 +334,20 @@ func WriteFileUDP(writer *net.UDPConn, reader *net.UDPAddr, b []byte, errorToWri
 	timeouts := 0
 	for {
 		// set deadline to allow for up to 10 seconds for a response
-		err := writer.SetReadDeadline(time.Now().Add(3 * time.Second))
+		err := writer.SetReadDeadline(time.Now().Add(15 * time.Second))
 		if err != nil {
-			return 0, err
+			return int(i), err
 		}
 		ackBuffer := make([]byte, 10)
 		// read acknowledgements into buffer
 		// (packets should contain no data, thus only a 10 byte header)
 		_, addr, err := writer.ReadFromUDP(ackBuffer)
+		//log.Debug(ackBuffer)
 		if err != nil {
 			log.Error(err)
 			timeouts += 1
-			if timeouts > 2 {
-				return 0, common.TimeoutError
+			if timeouts > 10 {
+				return int(i), common.TimeoutError
 			}
 			// if timeout occurs, rewrite all unacknowledged packets back to peer
 			var j uint32 = 0
@@ -367,7 +365,7 @@ func WriteFileUDP(writer *net.UDPConn, reader *net.UDPAddr, b []byte, errorToWri
 		// log receiving of acknowledgment packet
 		index = binary.BigEndian.Uint32(ackBuffer[0:4])
 		acksReceived[index] = true
-		if uint32(len(acksReceived)) == totalPackets {
+		if uint32(len(acksReceived)) == totalPackets-1 {
 			return int(totalPackets), nil
 		}
 	}

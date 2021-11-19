@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -1258,12 +1259,11 @@ func TestWriteFileUDP(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	b, err := ioutil.ReadFile("/home/duncan/Downloads/abc.txt") // b has type []byte
+	b, err := ioutil.ReadFile("/home/duncan/Downloads/abcde_long.txt") // b has type []byte
 	if err != nil {
 		t.Error(err)
 	}
 	log.Info(len(b))
-	log.Info(b)
 	go func() {
 		n, err := WriteFileUDP(UDPconn, address2, b, common.TimeoutError, common.File)
 		log.Debug("TOTAL SENT: ", n)
@@ -1272,14 +1272,16 @@ func TestWriteFileUDP(t *testing.T) {
 		}
 	}()
 	time.Sleep(1 * time.Second)
+	b = []byte{}
 	go func() {
 		returnVal := []byte{0, 0, 0, 0, 0, 0, 0, 2, 0, 0}
 		buffer := make([]byte, BufferSize)
-		_, _, err := UDPconn2.ReadFromUDP(buffer)
+		n, _, err := UDPconn2.ReadFromUDP(buffer)
 		if err != nil {
 			t.Error(err)
 			panic(err)
 		}
+		b = append(b, buffer[10:n]...)
 		packetNum := binary.BigEndian.Uint32(buffer[0:4])
 		binary.BigEndian.PutUint32(returnVal[0:4], packetNum)
 		UDPconn2.WriteTo(returnVal, address)
@@ -1290,13 +1292,159 @@ func TestWriteFileUDP(t *testing.T) {
 			if err != nil {
 				t.Error(err)
 			}
+			b = append(b, buffer[10:n]...)
 			packetNum := binary.BigEndian.Uint32(buffer[0:4])
 			binary.BigEndian.PutUint32(returnVal[0:4], packetNum)
 			UDPconn2.WriteTo(returnVal, address)
 			i++
 		}
+		os.WriteFile("download.txt", b, 777)
 		log.Debug("TOTAL RECEIVED: ", i)
 	}()
 
+	b, err = ioutil.ReadFile("/home/duncan/Downloads/abcd.txt") // b has type []byte
+	if err != nil {
+		t.Error(err)
+	}
+	log.Info(len(b))
+	go func() {
+		n, err := WriteFileUDP(UDPconn, address2, b, common.TimeoutError, common.File)
+		log.Debug("TOTAL SENT: ", n)
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+	time.Sleep(1 * time.Second)
+	b = []byte{}
+	go func() {
+		returnVal := []byte{0, 0, 0, 0, 0, 0, 0, 2, 0, 0}
+		buffer := make([]byte, BufferSize)
+		n, _, err := UDPconn2.ReadFromUDP(buffer)
+		if err != nil {
+			t.Error(err)
+			panic(err)
+		}
+		b = append(b, buffer[10:n]...)
+		packetNum := binary.BigEndian.Uint32(buffer[0:4])
+		binary.BigEndian.PutUint32(returnVal[0:4], packetNum)
+		UDPconn2.WriteTo(returnVal, address)
+		total := binary.BigEndian.Uint32(buffer[4:8])
+		i := uint32(1)
+		for i < total {
+			_, _, err := UDPconn2.ReadFromUDP(buffer)
+			if err != nil {
+				t.Error(err)
+			}
+			b = append(b, buffer[10:n]...)
+			packetNum := binary.BigEndian.Uint32(buffer[0:4])
+			binary.BigEndian.PutUint32(returnVal[0:4], packetNum)
+			UDPconn2.WriteTo(returnVal, address)
+			i++
+		}
+		os.WriteFile("download2.txt", b, 777)
+		log.Debug("TOTAL RECEIVED: ", i)
+	}()
+
+	b, err = ioutil.ReadFile("/home/duncan/Downloads/abc.txt") // b has type []byte
+	if err != nil {
+		t.Error(err)
+	}
+	log.Info(len(b))
+	go func() {
+		n, err := WriteFileUDP(UDPconn, address2, b, common.TimeoutError, common.File)
+		log.Debug("TOTAL SENT: ", n)
+		if err != nil {
+			t.Error(err)
+		}
+	}()
+	time.Sleep(1 * time.Second)
+	b = []byte{}
+	go func() {
+		returnVal := []byte{0, 0, 0, 0, 0, 0, 0, 2, 0, 0}
+		buffer := make([]byte, BufferSize)
+		n, _, err := UDPconn2.ReadFromUDP(buffer)
+		if err != nil {
+			t.Error(err)
+			panic(err)
+		}
+		b = append(b, buffer[10:n]...)
+		packetNum := binary.BigEndian.Uint32(buffer[0:4])
+		binary.BigEndian.PutUint32(returnVal[0:4], packetNum)
+		UDPconn2.WriteTo(returnVal, address)
+		total := binary.BigEndian.Uint32(buffer[4:8])
+		i := uint32(1)
+		for i < total {
+			_, _, err := UDPconn2.ReadFromUDP(buffer)
+			if err != nil {
+				t.Error(err)
+			}
+			b = append(b, buffer[10:n]...)
+			packetNum := binary.BigEndian.Uint32(buffer[0:4])
+			binary.BigEndian.PutUint32(returnVal[0:4], packetNum)
+			UDPconn2.WriteTo(returnVal, address)
+			i++
+		}
+		os.WriteFile("download3.txt", b, 777)
+		log.Debug("TOTAL RECEIVED: ", i)
+	}()
 	time.Sleep(1 * time.Minute)
+}
+
+func TestReadWriteFileUDP(t *testing.T) {
+	addr := "127.0.0.1:12345"
+	addr2 := "127.0.0.1:54321"
+	address, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		t.Error(err)
+	}
+	address2, err := net.ResolveUDPAddr("udp", addr2)
+	if err != nil {
+		t.Error(err)
+	}
+	UDPconn, err := net.ListenUDP("udp", address)
+	if err != nil {
+		t.Error(err)
+	}
+	UDPconn2, err := net.ListenUDP("udp", address2)
+	if err != nil {
+		t.Error(err)
+	}
+	file := "/home/duncan/Downloads/A17_FlightPlan.pdf"
+	b, err := ioutil.ReadFile(file)
+	if err != nil {
+		log.Error(err)
+	}
+	var wg sync.WaitGroup
+	go func() {
+		wg.Add(1)
+		b, n, addr, err := ReadFileUDP(UDPconn2, file)
+		if err != nil {
+			log.Error(err)
+			t.Error(err)
+			panic(err)
+		}
+		//err = os.WriteFile("download.jpg", b, 777)
+		//if err != nil {
+		//	log.Error(err)
+		//	t.Error(err)
+		//}
+		err = b.Close()
+		if err != nil {
+			t.Error(err)
+		}
+		log.Debug("TOTAL RECEIVED: ", n, " FROM: ", addr)
+		wg.Done()
+	}()
+	time.Sleep(1 * time.Second)
+	go func() {
+		wg.Add(1)
+		n, err := WriteFileUDP(UDPconn, address2, b, common.TimeoutError, common.File)
+		if err != nil {
+			log.Error(err)
+			t.Error(err)
+		}
+		log.Debug("TOTAL SENT: ", n)
+		wg.Done()
+	}()
+	wg.Wait()
 }
