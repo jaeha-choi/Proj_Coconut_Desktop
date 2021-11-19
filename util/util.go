@@ -92,6 +92,10 @@ func ReadMessageUDP(reader *net.UDPConn, buffer []byte) (msg *Message, addr *net
 	return msg, addr, err
 }
 
+// ReadFileUDP reads a packet from reader, then continues reading packets and creating the file under
+// ReadFileUDP returns a pointer to the prewritten file, the number of packets read, the address of peer and error if applicable
+// file name must be specified before call
+// timeouts may occur depending on file size being read
 func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, addr *net.UDPAddr, err error) {
 	// verify filename does not include path
 	fileName = filepath.Base(fileName)
@@ -101,9 +105,15 @@ func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, ad
 		log.Error("Error setting up read deadline")
 		return nil, 0, nil, err
 	}
+
+	// create necessary buffers and maps
+	// store read packets to be reordered
 	packets := make(map[uint32][]byte)
+	// general acknowledgment buffer
 	ackBuffer := make([]byte, 10)
+	// general data buffer
 	buffer := make([]byte, BufferSize)
+	// map for acknowledgment messages
 	ackMap := make(map[uint32]bool)
 
 	// read first packet
@@ -135,7 +145,9 @@ func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, ad
 	}
 	i := uint32(1)
 	for uint32(len(ackMap)) < total {
+		// clear buffer
 		buffer := make([]byte, BufferSize)
+		// reset deadline
 		err = reader.SetReadDeadline(time.Now().Add(20 * time.Second))
 		if err != nil {
 			return nil, 0, nil, err
@@ -163,12 +175,13 @@ func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, ad
 		ackBuffer[9] = buffer[9]
 		// set acknowledgment number to true
 		ackMap[packetNum] = true
+		// write acknowledgment
 		_, err = reader.WriteTo(ackBuffer, addr)
 		if err != nil {
 			log.Error("Error writing to peer")
 			return nil, 0, nil, err
 		}
-		err = reader.SetReadDeadline(time.Now().Add(10 * time.Second))
+
 		if err != nil {
 			log.Error("Error setting up read deadline")
 			return nil, 0, nil, err
@@ -306,29 +319,39 @@ func WriteFileUDP(writer *net.UDPConn, reader *net.UDPAddr, b []byte, errorToWri
 	header := make([]byte, 10)
 	// set start and end point for data to be sent excluding 10 bytes for header
 	var bufferStart = 0
-	var bufferEnd = 4086
+	// BUFFERSIZE - 10 BECAUSE HEADER IS 10 BYTES
+	var bufferEnd = BufferSize - 10
 	var i uint32 = 0
 	// write all packets to writer
 	for i < totalPackets {
-		if bufferStart+4086 >= len(b) {
+		if bufferStart+BufferSize-10 >= len(b) {
 			bufferEnd = len(b)
 		}
+		// set sequence number in header
 		binary.BigEndian.PutUint32(header[0:4], i)
+		// set total packet number in header
 		binary.BigEndian.PutUint32(header[4:8], totalPackets)
+		// preserve errorCode and commandCode
 		header[8] = errCode
 		header[9] = commandCode
+		// append header to data buffer
 		buffer := append(header, b[bufferStart:bufferEnd]...)
-		bufferStart += 4086
-		bufferEnd += 4086
+		// endit data start and end
+		bufferStart += BufferSize - 10
+		bufferEnd += BufferSize - 10
+		// write buffer to peer
 		_, err := writer.WriteTo(buffer, reader)
 		if err != nil {
 			log.Error("Error writing file peer")
 			return int(i), err
 		}
+		// write packet to packet map in case it needs to be resent
 		packets[i] = buffer
 		i++
 	}
-
+	//
+	// NOW READING ACKNOWLEDGMENTS/RESENDING PACKETS
+	// create acknowledgment map
 	acksReceived := make(map[uint32]bool)
 	var index uint32
 	timeouts := 0
@@ -344,15 +367,19 @@ func WriteFileUDP(writer *net.UDPConn, reader *net.UDPAddr, b []byte, errorToWri
 		_, addr, err := writer.ReadFromUDP(ackBuffer)
 		//log.Debug(ackBuffer)
 		if err != nil {
+			// timeout occurred
 			log.Error(err)
 			timeouts += 1
+			// check how many timeout have occured
 			if timeouts > 10 {
 				return int(i), common.TimeoutError
 			}
 			// if timeout occurs, rewrite all unacknowledged packets back to peer
 			var j uint32 = 0
+			// check what packets haven't been acknowledged
 			for j < totalPackets {
 				if _, ok := acksReceived[j]; !ok {
+					// rewrite unacknowledged packet
 					_, err = writer.WriteTo(packets[j], reader)
 				}
 				j++
@@ -364,7 +391,9 @@ func WriteFileUDP(writer *net.UDPConn, reader *net.UDPAddr, b []byte, errorToWri
 		}
 		// log receiving of acknowledgment packet
 		index = binary.BigEndian.Uint32(ackBuffer[0:4])
+		// set ack to received
 		acksReceived[index] = true
+		// check if length of ack is the same length as packets (if true, all packets acknowledged)
 		if uint32(len(acksReceived)) == totalPackets-1 {
 			return int(totalPackets), nil
 		}
