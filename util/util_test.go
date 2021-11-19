@@ -1409,16 +1409,20 @@ func TestReadWriteFileUDP(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	file := "/home/duncan/Downloads/A17_FlightPlan.pdf"
+	file := "/home/duncan/Downloads/MesloLGS NF Italic.ttf"
 	b, err := ioutil.ReadFile(file)
+	log.Debug("FILE SIZE: ", len(b), " bytes")
 	if err != nil {
 		log.Error(err)
 	}
+	now := time.Now()
 	var wg sync.WaitGroup
 	go func() {
 		wg.Add(1)
 		b, n, addr, err := ReadFileUDP(UDPconn2, file)
 		if err != nil {
+			log.Debug("TOTAL RECEIVED: ", n, " FROM: ", addr, "\nTIME: ", time.Since(now).Seconds())
+			wg.Done()
 			log.Error(err)
 			t.Error(err)
 			panic(err)
@@ -1430,21 +1434,25 @@ func TestReadWriteFileUDP(t *testing.T) {
 		//}
 		err = b.Close()
 		if err != nil {
+			wg.Done()
 			t.Error(err)
 		}
-		log.Debug("TOTAL RECEIVED: ", n, " FROM: ", addr)
+		log.Debug("TOTAL RECEIVED: ", n, " FROM: ", addr, "\nTIME: ", time.Since(now).Seconds())
 		wg.Done()
 	}()
 	time.Sleep(1 * time.Second)
 	go func() {
 		wg.Add(1)
-		n, err := WriteFileUDP(UDPconn, address2, b, common.TimeoutError, common.File)
+		c, err := WriteFileUDP(UDPconn, address2, b, common.TimeoutError, common.File)
 		if err != nil {
+			wg.Done()
 			log.Error(err)
 			t.Error(err)
 		}
-		log.Debug("TOTAL SENT: ", n)
+		log.Debug("TOTAL SENT: ", c, "\nTIME: ", time.Since(now).Seconds())
 		wg.Done()
 	}()
 	wg.Wait()
+	totalTime := time.Since(now).Seconds()
+	log.Debug("TOTAL TIME: ", totalTime)
 }

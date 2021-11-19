@@ -175,7 +175,7 @@ func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, ad
 		}
 		i++
 	}
-	// make sure all packets were received
+	// verify all packets were received
 	i = 0
 	for i < total {
 		if !ackMap[i] {
