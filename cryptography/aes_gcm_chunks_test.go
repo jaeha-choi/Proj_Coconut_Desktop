@@ -6,9 +6,12 @@ import (
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 )
 
 func TestEncryptDecrypt(t *testing.T) {
@@ -240,4 +243,81 @@ func ChecksumMatch(t *testing.T, expected io.Reader, result io.Reader) bool {
 		return false
 	}
 	return true
+}
+
+func TestAesGcmChunk_EncryptFileUDP(t *testing.T) {
+	testPath := "/home/duncan/projects/Proj_Coconut_Utility/testdata"
+
+	// // Setup udp address and connection
+	addr := "127.0.0.1:12345"
+	address, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		t.Error(err)
+	}
+	UDPConn, err := net.ListenUDP("udp", address)
+	if err != nil {
+		t.Error(err)
+	}
+	addr2 := "127.0.0.1:54321"
+	address2, err := net.ResolveUDPAddr("udp", addr2)
+	if err != nil {
+		t.Error(err)
+	}
+	UDPConn2, err := net.ListenUDP("udp", address2)
+	if err != nil {
+		t.Error(err)
+	}
+	// // Setup keys
+	// cat : receiver
+	// fox : sender
+	recvPub, err := OpenPubKey(testPath+"/keypairCat", "cat.pub")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	recvPriv, err := OpenPrivKey(testPath+"/keypairCat", "cat.priv")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	sendPub, err := OpenPubKey(testPath+"/keypairFox", "fox.pub")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	sendPriv, err := OpenPrivKey(testPath+"/keypairFox", "fox.priv")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	var wg sync.WaitGroup
+	go func() {
+		wg.Add(1)
+		// // Setup encryption structure
+		ag, err := EncryptSetup(testPath + "/cat.jpg")
+
+		// Encrypt and send file
+		err = ag.EncryptFileUDP(UDPConn, address, recvPub, sendPriv)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		wg.Done()
+	}()
+	time.Sleep(1 * time.Second)
+	go func() {
+		wg.Add(1)
+		// // Setup encryption structure
+		ag, err := DecryptSetup()
+
+		// Receive and decrypt file
+		err = ag.DecryptFileUDP(UDPConn2, address, sendPub, recvPriv)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		wg.Done()
+	}()
+	wg.Wait()
 }

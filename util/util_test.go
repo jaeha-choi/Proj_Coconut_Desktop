@@ -1409,9 +1409,9 @@ func TestReadWriteFileUDP(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	file := "/home/duncan/Downloads/MesloLGS NF Italic.ttf"
+	file := "/home/duncan/projects/Proj_Coconut_Utility/testdata/A17_FlightPlan.pdf"
 	b, err := ioutil.ReadFile(file)
-	log.Debug("FILE SIZE: ", len(b), " bytes")
+	log.Debug("FILE SIZE: ", ByteCountSI(int64(len(b))))
 	if err != nil {
 		log.Error(err)
 	}
@@ -1419,6 +1419,10 @@ func TestReadWriteFileUDP(t *testing.T) {
 	var wg sync.WaitGroup
 	go func() {
 		wg.Add(1)
+		//address := &syscall.SockaddrInet4{
+		//	Port: 54321,
+		//	Addr: [4]byte{127,0,0,1},
+		//}
 		b, n, addr, err := ReadFileUDP(UDPconn2, file)
 		if err != nil {
 			log.Debug("TOTAL RECEIVED: ", n, " FROM: ", addr, "\nTIME: ", time.Since(now).Seconds())
@@ -1455,4 +1459,21 @@ func TestReadWriteFileUDP(t *testing.T) {
 	wg.Wait()
 	totalTime := time.Since(now).Seconds()
 	log.Debug("TOTAL TIME: ", totalTime)
+	log.Debug(ByteCountSI(int64(float64(len(b))/totalTime)) + "s/second")
+
+}
+
+// used to convert bytes to KB/MB
+func ByteCountSI(b int64) string {
+	const unit = 1000
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB",
+		float64(b)/float64(div), "KMGTPE"[exp])
 }

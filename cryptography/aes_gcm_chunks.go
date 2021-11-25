@@ -300,6 +300,124 @@ func (ag *AesGcmChunk) EncryptUDP(writer *net.UDPConn, address *net.UDPAddr, rec
 	return nil
 }
 
+// EncryptFileUDP
+/* Encrypt Reliable UDP Process:
+// Must use encrypt setup first //
+	Create symmetric key `EncryptSignMsg`
+*	Send key
+-		[ACK] Read key
+* 	Send Signature
+-		[ACK] Read Signature
+	Encrypt num-chunks and filename
+*	Send Filename IV (random number)
+- 		[ACK] Read filename IV
+*	Send encrypted filename + chunk count
+- 		[ACK] Read filename
+// begin encrypting and sending file chunks //
+	while offset < size
+		Encrypt next file chunk of size *chunksize(variable)*
+*		Send file chunk iv	+ seq
+-	 		[ACK] Read file chunk iv seq
+*		Send file chunk + seq
+-			[ACK] Read file chunk seq
+	Close file
+
+// general ack (Encrypt) sequence
+send(message)
+err = read
+if err
+	for  i = 0; i  < 5; i++ // up to 5 timeouts
+		send again
+		err = read again
+		if err == nil
+			verify correct read
+			break
+// end general (Encrypt) ack sequence*/
+func (ag *AesGcmChunk) EncryptFileUDP(writer *net.UDPConn, address *net.UDPAddr, receiverPubKey *rsa.PublicKey, senderPrivKey *rsa.PrivateKey) (err error) {
+	var command = common.File
+
+	// Encrypt and sign symmetric encryption key
+	dataEncrypted, dataSignature, err := EncryptSignMsg(ag.key, receiverPubKey, senderPrivKey)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error in EncryptSignMsg")
+		return err
+	}
+
+	// Send encrypted symmetric key
+	if _, err = util.WriteMessageUDP(writer, address, dataEncrypted, nil, command); err != nil {
+		log.Debug(err)
+		log.Error("Error in WriteBytes while sending dataEncrypted")
+		return err
+	}
+
+	// Send encrypted symmetric key signature
+	if _, err = util.WriteMessageUDP(writer, address, dataSignature, nil, command); err != nil {
+		log.Debug(err)
+		log.Error("Error in WriteBytes while sending dataSignature")
+		return err
+	}
+
+	// Encrypt chunkCount + file name
+	encryptedFileName, fileNameIv, err := ag.encryptBytes(append(util.Uint16ToByte(ag.chunkCount), []byte(ag.fileName)...))
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error in encryptBytes while encrypting file name")
+		return err
+	}
+	// Send IV (Nonce)
+	if _, err = util.WriteMessageUDP(writer, address, fileNameIv, nil, command); err != nil {
+		log.Debug(err)
+		log.Error("Error in WriteBytes while writing fileNameIv")
+		return err
+	}
+	// Send encrypted file name
+	if _, err = util.WriteMessageUDP(writer, address, encryptedFileName, nil, command); err != nil {
+		log.Debug(err)
+		log.Error("Error in WriteBytes while writing encrypted file name")
+		return err
+	}
+
+	// Send encrypted file
+	var encryptedFileChunk, iv []byte
+	// Loop until every byte is sent
+	// ag.readOffset and ag.readChunkNum are updated in encryptChunk
+	for ag.readOffset < ag.fileSize {
+		if ag.readOffset+ChunkSize >= ag.fileSize {
+			// Send last chunk
+			encryptedFileChunk, iv, err = ag.encryptChunk(ag.fileSize - ag.readOffset)
+		} else {
+			// Send chunk
+			encryptedFileChunk, iv, err = ag.encryptChunk(ChunkSize)
+		}
+		if err != nil {
+			log.Debug(err)
+			log.Error("Error in encryptChunk. Read Offset: ", int(ag.readOffset))
+			return err
+		}
+		// Send IV in plain text
+		if _, err = util.WriteMessageUDP(writer, address, iv, nil, command); err != nil {
+			log.Debug(err)
+			log.Error("Error in WriteBytes while sending iv")
+			return err
+		}
+		// Send encrypted file chunk + current chunk number (first two bytes)
+		if _, err = util.WriteMessageUDP(writer, address, encryptedFileChunk, nil, command); err != nil {
+			log.Debug(err)
+			log.Error("Error in WriteBytes while sending encryptedFileChunk")
+			return err
+		}
+	}
+
+	// Close input file when done reading
+	if err := ag.file.Close(); err != nil {
+		log.Debug(err)
+		return err
+	}
+
+	return nil
+}
+
 // encryptChunk encrypts portion of the file and return it as []byte with current chunk number
 // appended in the beginning (first two bytes). IV is also returned in plain text.
 // err == nil indicates successful execution.
@@ -543,6 +661,159 @@ func (ag *AesGcmChunk) decryptBytes(encryptedData []byte, iv []byte) (decryptedD
 		return nil, err
 	}
 	return decryptedData, nil
+}
+
+// DecryptFileUDP :
+/* Decrypt Reliable UDP Process:
+// Must use decrypt setup first //
+*	Read key
+- 		[ACK] Send key
+*	Read signature
+- 		[ACK] Send Signature
+	Decrypt signature
+*	Read Filename IV
+- 		[ACK] Send filename IV
+*	Read Encrypted filename
+- 		[ACK] Send filename
+	Decrypt filename + chunk count (last 2 bytes)
+	update ag.filename
+	// begin reading and decrypting file chunks //
+	while chunkNum < chunk count
+*		Read chunk IV
+- 			[ACK] Send chunk IV
+*		Read chunk
+- 			[ACK] Send Chunk
+		Decrypt chunk using iv
+		Write chunk to file
+	Close file
+	rename file to decrypted filename */
+func (ag *AesGcmChunk) DecryptFileUDP(peerConn *net.UDPConn, peerAddr *net.UDPAddr, senderPubKey *rsa.PublicKey, receiverPrivKey *rsa.PrivateKey) (err error) {
+	// Create read buffer
+	buffer := make([]byte, util.BufferSize)
+	// Reads encrypted symmetric encryption key
+	dataEncrypted, _, err := util.ReadMessageUDP(peerConn, buffer)
+	if dataEncrypted.ErrorCode != 0 || err != nil {
+		log.Debug(err)
+		log.Error("Error in ReadBytes while getting dataEncrypted")
+		return common.ErrorCodes[dataEncrypted.ErrorCode]
+	}
+	// Reads signature for encrypted symmetric encryption key
+	dataSignature, _, err := util.ReadMessageUDP(peerConn, buffer)
+	if dataSignature.ErrorCode != 0 || err != nil {
+		log.Debug(err)
+		log.Error("Error in ReadBytes while getting dataEncrypted")
+		return common.ErrorCodes[dataSignature.ErrorCode]
+	}
+	// Verify and decrypts symmetric encryption key
+	ag.key, err = DecryptVerifyMsg(dataEncrypted.Data, dataSignature.Data, senderPubKey, receiverPrivKey)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error in DecryptVerifyMsg")
+		return err
+	}
+
+	// Get IV for decrypting file name
+	ivFileName, _, err := util.ReadMessageUDP(peerConn, buffer)
+	if ivFileName.ErrorCode != 0 || err != nil {
+		log.Debug(err)
+		log.Error("Error while reading iv for file name")
+		return common.ErrorCodes[ivFileName.ErrorCode]
+	}
+
+	// Get encrypted chunkCount + file name
+	encryptedFileName, _, err := util.ReadMessageUDP(peerConn, buffer)
+	if encryptedFileName.ErrorCode != 0 || err != nil {
+		log.Debug(err)
+		log.Error("Error while reading encrypted file name")
+		return common.ErrorCodes[encryptedFileName.ErrorCode]
+	}
+
+	// Decrypt chunkCount + file name with encrypted data and IV
+	decryptedFileName, err := ag.decryptBytes(encryptedFileName.Data, ivFileName.Data)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while decrypting file name")
+		return err
+	}
+
+	// Total chunk count is appended to file name
+	ag.chunkCount = util.ByteToUint16(decryptedFileName[:2])
+
+	// Update file name
+	ag.fileName = string(decryptedFileName[2:])
+
+	// Receive file and decrypt
+	var encryptedFileChunk, iv *util.Message
+	// Loop until every chunk is received
+	// ag.writeOffset and ag.writeChunkNum are updated in decryptChunk
+	for ag.writeChunkNum < ag.chunkCount {
+		// Read IV in plain text
+		if iv, _, err := util.ReadMessageUDP(peerConn, buffer); iv.ErrorCode != 0 || err != nil {
+			log.Debug(err)
+			log.Error("Error in ReadBytes while reading iv")
+			return common.ErrorCodes[iv.ErrorCode]
+		}
+		// Read encrypted file chunk + current chunk number (first two bytes)
+		if encryptedFileChunk, _, err := util.ReadMessageUDP(peerConn, buffer); encryptedFileChunk.ErrorCode != 0 || err != nil {
+			log.Debug(err)
+			log.Error("Error in ReadBytes while reading encryptedFileChunk")
+			return common.ErrorCodes[encryptedFileChunk.ErrorCode]
+		}
+		// Decrypt file chunk + current chunk number (first two bytes)
+		decryptedFileChunk, _, err := ag.decryptChunk(encryptedFileChunk.Data, iv.Data)
+		if err != nil {
+			log.Debug(err)
+			log.Error("Error in decryptChunk")
+			return err
+		}
+		// Write decrypted data to temp file
+		if _, err = ag.file.Write(decryptedFileChunk); err != nil {
+			log.Debug(err)
+			log.Error("Error while writing decrypted file chunk to temp file")
+			return err
+		}
+	}
+	//*--------------------DO NOT CHANGE BELOW THIS LINE------------------------------*//
+	// Close output file when done writing
+	if err := ag.file.Close(); err != nil {
+		log.Debug(err)
+		// If rename was unsuccessful, remove temp file
+		if err := os.Remove(ag.file.Name()); err != nil {
+			log.Debug(err)
+			log.Error("Error while removing temp file. Temp file at: ", ag.file.Name())
+			return err
+		}
+		return err
+	}
+
+	// If file was fully processed, rename temp file to actual name
+	if ag.writeChunkNum == ag.chunkCount {
+		// Rename temporary file
+		if err := os.Rename(ag.file.Name(), filepath.Join(util.DownloadPath, ag.fileName)); err != nil {
+			log.Debug(err)
+			log.Debug("Tmp file name: ", ag.file.Name())
+			log.Debug("File name: ", ag.fileName)
+			log.Error("Error moving the temp file to download path")
+			// If rename was unsuccessful, remove temp file
+			if err := os.Remove(ag.file.Name()); err != nil {
+				log.Debug(err)
+				log.Error("Error while removing temp file. Temp file at: ", ag.file.Name())
+				return err
+			}
+			return err
+		}
+	} else {
+		log.Error("Not all chunks were received")
+		// If file was not fully processed, delete file
+		if err := os.Remove(ag.file.Name()); err != nil {
+			log.Debug(err)
+			log.Error("Error while removing temp file. Temp file at: ", ag.file.Name())
+			return err
+		}
+		return IncompleteFile
+	}
+
+	return nil
 }
 
 // genSymKey generates random key for symmetric encryption

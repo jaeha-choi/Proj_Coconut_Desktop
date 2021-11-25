@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/common"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"gopkg.in/yaml.v3"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -28,14 +30,6 @@ type Message struct {
 	Data        []byte
 	ErrorCode   uint8
 	CommandCode uint8
-}
-
-type UDPMessage struct {
-	Data        []byte
-	ErrorCode   uint8
-	CommandCode uint8
-	Sequence    uint32
-	Size        uint32
 }
 
 var EmptyFileName = errors.New("empty filename")
@@ -75,6 +69,7 @@ func ReadMessage(reader io.Reader) (msg *Message, err error) {
 
 func ReadMessageUDP(reader *net.UDPConn, buffer []byte) (msg *Message, addr *net.UDPAddr, err error) {
 	// Read packet size
+
 	_, addr, err = reader.ReadFromUDP(buffer)
 	if err != nil {
 		return nil, nil, err
@@ -114,8 +109,6 @@ func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, ad
 	// general data buffer
 	buffer := make([]byte, BufferSize)
 	// map for acknowledgment messages
-	ackMap := make(map[uint32]bool)
-
 	// read first packet
 	n, addr, err = reader.ReadFromUDP(buffer)
 	if err != nil {
@@ -127,16 +120,17 @@ func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, ad
 	// add packet to packet map
 	packets[packetNum] = buffer[10:n]
 	// write sequence number to acknowledgment header
-	binary.BigEndian.PutUint32(ackBuffer[0:4], packetNum)
+	//binary.BigEndian.PutUint32(ackBuffer[0:4], packetNum)
 	// get number of total packets
 	total := binary.BigEndian.Uint32(buffer[4:8])
 	// write total number to acknowledgment header
-	binary.BigEndian.PutUint32(ackBuffer[4:8], total)
+	//binary.BigEndian.PutUint32(ackBuffer[4:8], total)
 	// preserver error and command codes
-	ackBuffer[8] = buffer[8]
-	ackBuffer[9] = buffer[9]
+	//ackBuffer[8] = buffer[8]
+	//ackBuffer[9] = buffer[9]
 	// set acknowledgment number to true
-	ackMap[packetNum] = true
+	// set ackBuffer to header in buffer
+	ackBuffer = buffer[:10]
 	// write acknowledgment back to peer
 	_, err = reader.WriteTo(ackBuffer, addr)
 	if err != nil {
@@ -144,7 +138,7 @@ func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, ad
 		return nil, 0, nil, err
 	}
 	i := uint32(1)
-	for uint32(len(ackMap)) < total {
+	for uint32(len(packets)) < total {
 		// clear buffer
 		buffer := make([]byte, BufferSize)
 		// reset deadline
@@ -159,39 +153,26 @@ func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, ad
 			log.Error("Error reading from peer")
 			return nil, 0, nil, common.TimeoutError
 		}
+		ackBuffer = buffer[:10]
 		// 	Preserve Header
 		// get sequence number
 		packetNum := binary.BigEndian.Uint32(buffer[0:4])
-		// add packet to packet map
+		//// add packet to packet map
 		packets[packetNum] = buffer[10:n]
-		// write sequence number to acknowledgment header
-		binary.BigEndian.PutUint32(ackBuffer[0:4], packetNum)
-		// get number of total packets
-		total := binary.BigEndian.Uint32(buffer[4:8])
-		// write total number to acknowledgment header
-		binary.BigEndian.PutUint32(ackBuffer[4:8], total)
-		// preserver error and command codes
-		ackBuffer[8] = buffer[8]
-		ackBuffer[9] = buffer[9]
-		// set acknowledgment number to true
-		ackMap[packetNum] = true
 		// write acknowledgment
 		_, err = reader.WriteTo(ackBuffer, addr)
 		if err != nil {
 			log.Error("Error writing to peer")
 			return nil, 0, nil, err
 		}
-
-		if err != nil {
-			log.Error("Error setting up read deadline")
-			return nil, 0, nil, err
-		}
 		i++
 	}
+	binary.BigEndian.PutUint32(ackBuffer[0:4], Uint32Max)
+	reader.WriteTo(ackBuffer, addr)
 	// verify all packets were received
 	i = 0
 	for i < total {
-		if !ackMap[i] {
+		if _, ok := packets[i]; !ok {
 			log.Error("Packet ", i, " missing")
 			return nil, 0, nil, common.TaskNotCompleteError
 		}
@@ -204,6 +185,71 @@ func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, ad
 	}
 	// write packets in order
 	i = 0
+	for i < total {
+		_, err := file.Write(packets[i])
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		i++
+	}
+	return file, int(i), addr, err
+}
+
+func ReadFileUDP2(address *syscall.SockaddrInet4, fileName string) (file *os.File, n int, addr *net.UDPAddr, err error) {
+	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, syscall.IPPROTO_UDP)
+	if err != nil {
+		log.Error(err)
+		return nil, 0, nil, err
+	}
+
+	err = syscall.Bind(fd, address)
+	if err != nil {
+		log.Error(err)
+		return nil, 0, nil, err
+	}
+
+	f := os.NewFile(uintptr(fd), "UDPREAD")
+	//err = f.SetDeadline(time.Now().Add(10 * time.Second))
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	packets := make(map[uint32][]byte)
+	buf := make([]byte, BufferSize)
+	log.Debug("reading")
+	n, err = f.Read(buf)
+	log.Debug(buf[10:n])
+	packetNum := binary.BigEndian.Uint32(buf[0:4])
+	total := binary.BigEndian.Uint32(buf[4:8])
+	log.Debug("TOTAL: ", total)
+	packets[packetNum] = buf[10:n]
+	log.Debug(len(packets))
+	f.Write(buf[:10])
+	timeouts := 0
+	for {
+		//err = f.SetDeadline(time.Now().Add(10 * time.Second))
+		if uint32(len(packets)) == total {
+			break
+		}
+		n, err = f.Read(buf)
+		if err != nil {
+			fmt.Println(err)
+			timeouts += 1
+			if timeouts > 5 {
+				return nil, 0, nil, common.TimeoutError
+			}
+		}
+		packetNum := binary.BigEndian.Uint32(buf[0:4])
+		packets[packetNum] = buf[10:n]
+		f.Write(buf[:10])
+		log.Debug("READ ", buf[:n])
+	}
+	// open file to write
+	file, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+	if err != nil {
+		log.Error(err)
+	}
+	// write packets in order
+	i := uint32(0)
 	for i < total {
 		_, err := file.Write(packets[i])
 		if err != nil {
@@ -303,10 +349,10 @@ func WriteFileUDP(writer *net.UDPConn, reader *net.UDPAddr, b []byte, errorToWri
 	total := make([]byte, 4)
 	binary.BigEndian.PutUint32(total, totalPackets)
 	// create general buffer with hardcoded error and command
-	// create genera header
 	// bytes 0:4 : sequence number
 	// bytes 4:8 : totalPackets
 	// byte 8	 : error code
+	// byte 9	 : command code
 	var errCode uint8 = 0
 	if errorToWrite != nil {
 		errCode = errorToWrite.ErrCode
@@ -315,89 +361,118 @@ func WriteFileUDP(writer *net.UDPConn, reader *net.UDPAddr, b []byte, errorToWri
 	if commandToWrite != nil {
 		commandCode = commandToWrite.Code
 	}
-	// byte 9	 : command code
 	header := make([]byte, 10)
 	// set start and end point for data to be sent excluding 10 bytes for header
-	var bufferStart = 0
-	// BUFFERSIZE - 10 BECAUSE HEADER IS 10 BYTES
-	var bufferEnd = BufferSize - 10
-	var i uint32 = 0
-	// write all packets to writer
-	for i < totalPackets {
-		if bufferStart+BufferSize-10 >= len(b) {
-			bufferEnd = len(b)
-		}
-		// set sequence number in header
-		binary.BigEndian.PutUint32(header[0:4], i)
-		// set total packet number in header
-		binary.BigEndian.PutUint32(header[4:8], totalPackets)
-		// preserve errorCode and commandCode
-		header[8] = errCode
-		header[9] = commandCode
-		// append header to data buffer
-		buffer := append(header, b[bufferStart:bufferEnd]...)
-		// endit data start and end
-		bufferStart += BufferSize - 10
-		bufferEnd += BufferSize - 10
-		// write buffer to peer
-		_, err := writer.WriteTo(buffer, reader)
-		if err != nil {
-			log.Error("Error writing file peer")
-			return int(i), err
-		}
-		// write packet to packet map in case it needs to be resent
-		packets[i] = buffer
-		i++
-	}
-	//
-	// NOW READING ACKNOWLEDGMENTS/RESENDING PACKETS
-	// create acknowledgment map
-	acksReceived := make(map[uint32]bool)
-	var index uint32
-	timeouts := 0
-	for {
-		// set deadline to allow for up to 10 seconds for a response
-		err := writer.SetReadDeadline(time.Now().Add(15 * time.Second))
-		if err != nil {
-			return int(i), err
-		}
-		ackBuffer := make([]byte, 10)
-		// read acknowledgements into buffer
-		// (packets should contain no data, thus only a 10 byte header)
-		_, addr, err := writer.ReadFromUDP(ackBuffer)
-		//log.Debug(ackBuffer)
-		if err != nil {
-			// timeout occurred
-			log.Error(err)
-			timeouts += 1
-			// check how many timeout have occured
-			if timeouts > 10 {
-				return int(i), common.TimeoutError
+	totalSent := make(chan int)
+	returnErr := make(chan error)
+	go func() {
+		var bufferStart = 0
+		// BUFFERSIZE - 10 BECAUSE HEADER IS 10 BYTES OF EVERY PACKET
+		var bufferEnd = BufferSize - 10
+		var i uint32 = 0
+		// write all packets to writer
+		for i < totalPackets {
+			if bufferStart+BufferSize-10 >= len(b) {
+				bufferEnd = len(b)
 			}
-			// if timeout occurs, rewrite all unacknowledged packets back to peer
-			var j uint32 = 0
-			// check what packets haven't been acknowledged
-			for j < totalPackets {
-				if _, ok := acksReceived[j]; !ok {
-					// rewrite unacknowledged packet
-					_, err = writer.WriteTo(packets[j], reader)
+			// set sequence number in header
+			binary.BigEndian.PutUint32(header[0:4], i)
+			// set total packet number in header
+			binary.BigEndian.PutUint32(header[4:8], totalPackets)
+			// preserve errorCode and commandCode
+			header[8] = errCode
+			header[9] = commandCode
+			// append header to data buffer
+			buffer := append(header, b[bufferStart:bufferEnd]...)
+			// edit data start and end
+			bufferStart += BufferSize - 10
+			bufferEnd += BufferSize - 10
+			// write buffer to peer
+			_, err := writer.WriteTo(buffer, reader)
+			if err != nil {
+				log.Error("Error writing file peer")
+				totalSent <- int(i)
+				returnErr <- err
+				//return int(i), err
+			}
+			// write packet to packet map in case it needs to be resent
+			packets[i] = buffer
+			i++
+		}
+	}()
+	go func() {
+		//
+		// NOW READING ACKNOWLEDGMENTS/RESENDING PACKETS
+		// create acknowledgment map
+		acksReceived := make(map[uint32]bool)
+		var index uint32
+		timeouts := 0
+		for {
+			if uint32(len(acksReceived)) == totalPackets {
+				totalSent <- int(totalPackets)
+				returnErr <- nil
+				//return int(totalPackets), nil
+			}
+			// set deadline to allow for up to 10 seconds for a response
+			err := writer.SetReadDeadline(time.Now().Add(15 * time.Second))
+			if err != nil {
+				totalSent <- 0
+				returnErr <- err
+				//return 0, err
+			}
+			ackBuffer := make([]byte, 10)
+			// read acknowledgements into buffer
+			// (packets should contain no data, thus only a 10 byte header)
+			_, addr, err := writer.ReadFromUDP(ackBuffer)
+
+			//log.Debug(ackBuffer)
+			if err != nil {
+				// check if all packets received first
+				log.Debug("Total Acknowledgments Received: ", len(acksReceived))
+				if uint32(len(acksReceived)) == totalPackets {
+					totalSent <- int(totalPackets)
+					returnErr <- nil
+					//return int(totalPackets), nil
 				}
-				j++
+				// timeout occurred
+				log.Error(err)
+				timeouts += 1
+				// check how many timeout have occurred
+				if timeouts > 10 {
+					totalSent <- 0
+					returnErr <- common.TimeoutError
+					//return 0, common.TimeoutError
+				}
+				// if timeout occurs, rewrite all unacknowledged packets back to peer
+				var j uint32 = 0
+				// check what packets haven't been acknowledged
+				for j < totalPackets {
+					if _, ok := acksReceived[j]; !ok {
+						// rewrite unacknowledged packet
+						_, err = writer.WriteTo(packets[j], reader)
+					}
+					j++
+				}
 			}
+			// if received address does not match sent address, do nothing
+
+			if sqc := binary.BigEndian.Uint32(ackBuffer[0:4]); sqc == Uint32Max {
+				totalSent <- int(totalPackets)
+				returnErr <- nil
+			}
+			if addr.String() != reader.String() {
+				continue
+			}
+			// log receiving of acknowledgment packet
+			index = binary.BigEndian.Uint32(ackBuffer[0:4])
+			// set ack to received
+			acksReceived[index] = true
+			// check if length of ack is the same length as packets (if true, all packets acknowledged)
 		}
-		// if received address does not match sent address, do nothing
-		if addr.String() != reader.String() {
-			continue
-		}
-		// log receiving of acknowledgment packet
-		index = binary.BigEndian.Uint32(ackBuffer[0:4])
-		// set ack to received
-		acksReceived[index] = true
-		// check if length of ack is the same length as packets (if true, all packets acknowledged)
-		if uint32(len(acksReceived)) == totalPackets-1 {
-			return int(totalPackets), nil
-		}
-	}
+	}()
+	packetsSent := <-totalSent
+	returnError := <-returnErr
+	return packetsSent, returnError
 }
 
 // readSize reads first 4 bytes from the reader and convert them into a uint32 value
