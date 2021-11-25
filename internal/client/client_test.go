@@ -203,6 +203,21 @@ func TestKeys(t *testing.T) {
 	//log.Debug(string(key2))
 }
 
+//func TestDeadline(t *testing.T){
+//	addr := "127.0.0.1"
+//	l, _ := net.ResolveUDPAddr("udp", addr)
+//	list, _ := net.ListenUDP("udp", l)
+//	err := list.SetReadDeadline(time.Now().Add(5 * time.Second))
+//	if err != nil {
+//		log.Error(err)
+//	}
+//	buffer := make([]byte,1)
+//	_, _, err = list.ReadFromUDP(buffer)
+//	if err != nil{
+//
+//	}
+//}
+
 //func TestConnect(t *testing.T) {
 //	client, err := InitConfig()
 //	if err != nil {

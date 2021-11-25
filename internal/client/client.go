@@ -182,11 +182,12 @@ func (client *Client) commandHandler() {
 
 func (client *Client) UDPCommandHandler() (err error) {
 	client.logger.Debug("Entering UDP Command Handler")
-	//buffer := make([]byte, 4096)
+	buffer := make([]byte, 4096)
 	for {
-		msg, addr, err := util.ReadMessageUDP(client.peerConn)
+		msg, addr, err := util.ReadMessageUDP(client.peerConn, buffer)
 		// Clear Buffer
-		//buffer = make([]byte, 4096)
+		buffer = make([]byte, 4096)
+
 		client.logger.Info("UDP COMMAND HANDLER: ", msg.CommandCode, " ", msg.ErrorCode, " ", msg.Data, " ", addr.String())
 		if err != nil {
 			client.logger.Error(err)
