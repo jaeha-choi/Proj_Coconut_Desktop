@@ -37,6 +37,7 @@ var ErrorCodes = [256]*Error{
 	PubKeyNotFoundError,
 	ClosedConnError,
 	TimeoutError,
+	DataTooLargeError,
 }
 
 var UnknownCodeError = &Error{
@@ -110,6 +111,11 @@ var ClosedConnError = &Error{
 }
 
 var TimeoutError = &Error{
-	Err:     errors.New("connection timed out "),
+	Err:     errors.New("connection timed out"),
 	ErrCode: 15,
+}
+
+var DataTooLargeError = &Error{
+	Err:     errors.New("data to large for buffer"),
+	ErrCode: 16,
 }
