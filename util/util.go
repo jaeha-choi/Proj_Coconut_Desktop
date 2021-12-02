@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/common"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
 	"gopkg.in/yaml.v3"
@@ -15,7 +14,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
 	"time"
 )
 
@@ -28,6 +26,14 @@ const (
 
 type Message struct {
 	Data        []byte
+	ErrorCode   uint8
+	CommandCode uint8
+}
+
+type UDPMessage struct {
+	Data        []byte
+	Sequence    uint32
+	Total       uint32
 	ErrorCode   uint8
 	CommandCode uint8
 }
@@ -85,6 +91,27 @@ func ReadMessageUDP(reader *net.UDPConn, buffer []byte) (msg *Message, addr *net
 		CommandCode: commandCode,
 	}
 	return msg, addr, err
+}
+
+func ReadFilePacketUDP(writer *net.UDPConn) (msg *UDPMessage, err error) {
+	buffer := make([]byte, BufferSize)
+	n, _, err := writer.ReadFromUDP(buffer)
+	if err != nil {
+		return nil, err
+	}
+	sequence := binary.BigEndian.Uint32(buffer[0:4])
+	total := binary.BigEndian.Uint32(buffer[4:8])
+	errCode := buffer[8]
+	commandCode := buffer[9]
+	data := buffer[10:n]
+	buffer = make([]byte, BufferSize)
+	return &UDPMessage{
+		Data:        data,
+		Sequence:    sequence,
+		Total:       total,
+		ErrorCode:   errCode,
+		CommandCode: commandCode,
+	}, nil
 }
 
 // ReadFileUDP reads a packet from reader, then continues reading packets and creating the file under
@@ -185,71 +212,6 @@ func ReadFileUDP(reader *net.UDPConn, fileName string) (file *os.File, n int, ad
 	}
 	// write packets in order
 	i = 0
-	for i < total {
-		_, err := file.Write(packets[i])
-		if err != nil {
-			return nil, 0, nil, err
-		}
-		i++
-	}
-	return file, int(i), addr, err
-}
-
-func ReadFileUDP2(address *syscall.SockaddrInet4, fileName string) (file *os.File, n int, addr *net.UDPAddr, err error) {
-	fd, err := syscall.Socket(syscall.AF_INET, syscall.SOCK_DGRAM, syscall.IPPROTO_UDP)
-	if err != nil {
-		log.Error(err)
-		return nil, 0, nil, err
-	}
-
-	err = syscall.Bind(fd, address)
-	if err != nil {
-		log.Error(err)
-		return nil, 0, nil, err
-	}
-
-	f := os.NewFile(uintptr(fd), "UDPREAD")
-	//err = f.SetDeadline(time.Now().Add(10 * time.Second))
-	if err != nil {
-		return nil, 0, nil, err
-	}
-	packets := make(map[uint32][]byte)
-	buf := make([]byte, BufferSize)
-	log.Debug("reading")
-	n, err = f.Read(buf)
-	log.Debug(buf[10:n])
-	packetNum := binary.BigEndian.Uint32(buf[0:4])
-	total := binary.BigEndian.Uint32(buf[4:8])
-	log.Debug("TOTAL: ", total)
-	packets[packetNum] = buf[10:n]
-	log.Debug(len(packets))
-	f.Write(buf[:10])
-	timeouts := 0
-	for {
-		//err = f.SetDeadline(time.Now().Add(10 * time.Second))
-		if uint32(len(packets)) == total {
-			break
-		}
-		n, err = f.Read(buf)
-		if err != nil {
-			fmt.Println(err)
-			timeouts += 1
-			if timeouts > 5 {
-				return nil, 0, nil, common.TimeoutError
-			}
-		}
-		packetNum := binary.BigEndian.Uint32(buf[0:4])
-		packets[packetNum] = buf[10:n]
-		f.Write(buf[:10])
-		log.Debug("READ ", buf[:n])
-	}
-	// open file to write
-	file, err = os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
-	if err != nil {
-		log.Error(err)
-	}
-	// write packets in order
-	i := uint32(0)
 	for i < total {
 		_, err := file.Write(packets[i])
 		if err != nil {
@@ -974,4 +936,53 @@ func WriteBinary(writer io.Writer, filePath string) (int, error) {
 		return writtenSize, err
 	}
 	return writtenSize, nil
+}
+
+// ReadAckUDP waits for and reads acknowledgment of previously sent packet
+// matches sequence num with incoming packet sequence num
+// returns true if acknowledgment found, false if timeout occurs
+// *can take up to 15 seconds to execute if timeout occurs
+func ReadAckUDP(seqNum uint32, writer *net.UDPConn, address *net.UDPAddr, packet []byte) (ack bool) {
+	buffer := make([]byte, 4)
+	if err := writer.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return false
+	}
+	timeoutCount := 0
+	for timeoutCount < 3 {
+		if _, _, err := writer.ReadFromUDP(buffer); err != nil {
+			timeoutCount += 1
+			if _, err = writer.WriteTo(packet, address); err != nil {
+				return false
+			}
+		} else {
+			if sqc := binary.BigEndian.Uint32(buffer); sqc == seqNum {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func WriteFilePacketUDP(writer *net.UDPConn, addr *net.UDPAddr, sequence uint32, totalPackets uint32, e *common.Error, command *common.Command, data []byte) (packet []byte, err error) {
+	if len(data) > 4086 {
+		return nil, common.DataTooLargeError
+	}
+
+	header := make([]byte, 10)
+	binary.BigEndian.PutUint32(header[0:4], sequence)
+	binary.BigEndian.PutUint32(header[4:8], totalPackets)
+	var errCode uint8 = 0
+	if e != nil {
+		errCode = e.ErrCode
+	}
+	var commandCode uint8 = 0
+	if command != nil {
+		commandCode = command.Code
+	}
+	header[8] = errCode
+	header[9] = commandCode
+	packet = append(header, data...)
+
+	_, err = writer.WriteTo(packet, addr)
+	return packet, err
 }
