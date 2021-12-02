@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
-	"time"
 )
 
 func TestEncryptDecrypt(t *testing.T) {
@@ -290,24 +289,32 @@ func TestAesGcmChunk_EncryptFileUDP(t *testing.T) {
 		t.Error(err)
 		return
 	}
-
+	//msgs := make(chan *util.Message)
+	//go func() {
+	//	for {
+	//		buffer := make([]byte, 4096)
+	//		msg, _, _ := util.ReadMessageUDP(UDPConn2, buffer)
+	//		msgs <- msg
+	//	}
+	//}()
 	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		// // Setup encryption structure
-		ag, err := EncryptSetup(testPath + "/cat.jpg")
-
+		ag, err := EncryptSetup(testPath + "/A17_FlightPlan.pdf")
+		log.Debug(ag.chunkCount)
 		// Encrypt and send file
-		err = ag.EncryptFileUDP(UDPConn, address, recvPub, sendPriv)
+		err = ag.EncryptFileUDP(UDPConn, address2, recvPub, sendPriv)
 		if err != nil {
 			t.Error(err)
 			return
 		}
+		log.Debug("file sent")
 		wg.Done()
 	}()
-	time.Sleep(1 * time.Second)
+	//time.Sleep(1 * time.Second)
+	wg.Add(1)
 	go func() {
-		wg.Add(1)
 		// // Setup encryption structure
 		ag, err := DecryptSetup()
 
@@ -317,7 +324,65 @@ func TestAesGcmChunk_EncryptFileUDP(t *testing.T) {
 			t.Error(err)
 			return
 		}
+		log.Debug("file decrypted")
 		wg.Done()
 	}()
 	wg.Wait()
+}
+
+func TestEncryptSize(t *testing.T) {
+	testPath := "/home/duncan/projects/Proj_Coconut_Utility/testdata"
+
+	// // Setup udp address and connection
+	addr := "127.0.0.1:12345"
+	address, err := net.ResolveUDPAddr("udp", addr)
+	if err != nil {
+		t.Error(err)
+	}
+	UDPConn, err := net.ListenUDP("udp", address)
+	if err != nil {
+		t.Error(err)
+	}
+	addr2 := "127.0.0.1:54321"
+	address2, err := net.ResolveUDPAddr("udp", addr2)
+	if err != nil {
+		t.Error(err)
+	}
+	//UDPConn2, err := net.ListenUDP("udp", address2)
+	//if err != nil {
+	//	t.Error(err)
+	//}
+	// // Setup keys
+	// cat : receiver
+	// fox : sender
+	recvPub, err := OpenPubKey(testPath+"/keypairCat", "cat.pub")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	//recvPriv, err := OpenPrivKey(testPath+"/keypairCat", "cat.priv")
+	//if err != nil {
+	//	t.Error(err)
+	//	return
+	//}
+	//sendPub, err := OpenPubKey(testPath+"/keypairFox", "fox.pub")
+	//if err != nil {
+	//	t.Error(err)
+	//	return
+	//}
+	sendPriv, err := OpenPrivKey(testPath+"/keypairFox", "fox.priv")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	ag, err := EncryptSetup(testPath + "/cat.jpg")
+	log.Debug(ag.fileSize)
+	log.Debug(ag.chunkCount)
+	if err != nil {
+		t.Error()
+	}
+	err = ag.EncryptUDP(UDPConn, address2, recvPub, sendPriv)
+	if err != nil {
+		return
+	}
 }
