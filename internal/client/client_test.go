@@ -1,9 +1,9 @@
 package client
 
 import (
+	"fmt"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/cryptography"
 	"github.com/jaeha-choi/Proj_Coconut_Utility/log"
-	"github.com/jaeha-choi/Proj_Coconut_Utility/util"
 	"os"
 	"testing"
 	"time"
@@ -14,7 +14,7 @@ func initClient(keyN string, log *log.Logger) Client {
 
 	client := InitConfig(log)
 	//client.KeyPath = "/home/duncan/projects/Proj_Coconut_Desktop"
-	//client.ServerHost = "coconut-demo.jaeha.dev"
+	client.ServerHost = "coconut-demo.jaeha.dev"
 	pubBlock, err := cryptography.OpenKeysAsBlock(client.KeyPath, keyN+".pub")
 	if err != nil {
 		log.Error(err)
@@ -70,11 +70,10 @@ func TestDoOpenHolePunch2(t *testing.T) {
 	client.addContact("duncan2", "spani2", []byte("pGlM84wEUTwm9S5tmMEca5YvBcUyw26FdNJ75GkqwtE="), "server.pub")
 
 	time.Sleep(1 * time.Minute)
-	msg, _ := util.ReadMessage(client.peerConn)
-	log.Debug(string(msg.Data))
 }
 
 func TestDoOpenHolePunchLocalHost(t *testing.T) {
+	testDataPath := "../../testdata/"
 	l := log.NewLogger(os.Stdout, log.DEBUG, "SERVER ")
 	server := initClient("key", l)
 	l2 := log.NewLogger(os.Stdout, log.DEBUG, "CLIENT ")
@@ -114,11 +113,7 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 		}
 		client.logger.Info("end request Pubkey")
 
-		client.addContact("jaeha", "choi", []byte("su+oF6panqRPm8cPyRJ9cAnlPFbEjzPgsIkaPbqNee4="), "server.pub")
-		client.addContact("robin", "seo", []byte("FBkHZ6e+q4yxaE9TsvPtFbE9HF1vpJP2MnWjvmWWiGI="), "server.pub")
-		client.addContact("duncan", "spani", []byte("GoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), "server.key")
-		client.addContact("duncan2", "spani2", []byte("haGoLvuVi0pf5tf4oqbRK1iex0aK56xjeMQR8vIykzS1U="), "server.pub")
-		client.addContact("duncan", "spani", []byte("Wcrk//snVV+2hsNIGwVnrvsu4Txfj2YsbVVYVYTGxr0="), "server.key")
+		client.addContact("jaeha", "choi", []byte(client.peerKey), "server.key")
 
 		client.logger.Info("end")
 		time.Sleep(1 * time.Minute)
@@ -163,7 +158,7 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 		server.logger.Debug("end requestp2p")
 		time.Sleep(1 * time.Second)
 		server.logger.Debug("Starting send file")
-		err = server.DoSendFile("/home/duncan/Pictures/Screenshot_20211109_130022.png")
+		err = server.DoSendFile(testDataPath + "1000000 Sales Records(119MB).csv")
 		if err != nil {
 			return
 		}
@@ -172,6 +167,102 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 		time.Sleep(1 * time.Minute)
 	}()
 
+	time.Sleep(1 * time.Minute)
+
+}
+
+// Remote testing to send file to peer
+func TestClient_DoSendFile(t *testing.T) {
+	testDataPath := "../../testdata/"
+	logger := log.NewLogger(os.Stdout, log.DEBUG, "SERVER ")
+	client := initClient("key", logger)
+
+	_ = client.Connect()
+	defer func() {
+		err := client.Disconnect()
+		if err != nil {
+			client.logger.Error(err)
+		}
+	}()
+
+	err := client.DoGetAddCode()
+	if err != nil {
+		return
+	}
+
+	var peerCode string
+	var cont = "n"
+	// get add code from user
+	client.logger.Info("Enter AddCode of Peer: ")
+	fmt.Scanf("%s", &peerCode)
+
+	// check if add code correct
+	client.logger.Info("AddCode: ", peerCode, " correct? (y/n): ")
+	fmt.Scanf("%s", &cont)
+	if cont == "n" {
+		t.Error("Bad Add code")
+		return
+	}
+
+	err = client.DoRequestPubKey(peerCode, "peer.key")
+	if err != nil {
+		client.logger.Error(err)
+	}
+
+	client.addContact("first", "last", []byte(client.peerKey), "peer.key")
+
+	time.Sleep(3 * time.Second)
+
+	err = client.DoRequestP2P([]byte(client.peerKey))
+	if err != nil {
+		log.Error(err)
+	}
+
+	time.Sleep(1 * time.Second)
+
+	err = client.DoSendFile(testDataPath + "1000000 Sales Records(119MB).csv")
+	if err != nil {
+		return
+	}
+
+}
+
+// Remote testing to get file from peer
+func TestPeer_HandleGetFile(t *testing.T) {
+	logger := log.NewLogger(os.Stdout, log.DEBUG, "CLIENT ")
+	client := initClient("keyJae", logger)
+	_ = client.Connect()
+	defer func() {
+		err := client.Disconnect()
+		if err != nil {
+			client.logger.Error(err)
+		}
+	}()
+	err := client.DoGetAddCode()
+	if err != nil {
+		return
+	}
+	var peerCode string
+	var cont = "n"
+	// get add code from user
+	client.logger.Info("Enter AddCode of Peer: ")
+	fmt.Scanf("%s", &peerCode)
+
+	// check if add code correct
+	client.logger.Info("AddCode: ", peerCode, " correct? (y/n): ")
+	fmt.Scanf("%s", &cont)
+	if cont == "n" {
+		t.Error("Bad Add code")
+		return
+	}
+
+	err = client.DoRequestPubKey(peerCode, "peer.key")
+	if err != nil {
+		client.logger.Error(err)
+	}
+
+	client.addContact("first", "last", []byte(client.peerKey), "peer.key")
+	// command handler running in background
 	time.Sleep(1 * time.Minute)
 
 }

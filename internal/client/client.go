@@ -16,6 +16,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -63,6 +64,8 @@ type Client struct {
 	peerAddr *net.UDPAddr
 	// peerKey is a p2p pubkey hash used to identify the client connected to
 	peerKey string
+	// peerChan is a channel used to pause and resume the UDP command handler
+	peerChan chan int
 	// localAddr is a local address of this client
 	localAddr net.Addr
 	// addCode is the current Add Code associated with this client
@@ -98,6 +101,7 @@ func InitConfig(log *log.Logger) (client *Client) {
 		conn:        nil,
 		peerConn:    nil,
 		peerKey:     "",
+		peerChan:    make(chan int),
 		localAddr:   nil,
 		addCode:     "",
 		contactMap:  make(map[string]*Contact),
@@ -182,15 +186,22 @@ func (client *Client) commandHandler() {
 
 func (client *Client) UDPCommandHandler() (err error) {
 	client.logger.Debug("Entering UDP Command Handler")
-	buffer := make([]byte, 4096)
+	defer func() {
+		_ = client.UDPDisconnect()
+	}()
+	// make channel for pause command
 	for {
-		msg, addr, err := util.ReadMessageUDP(client.peerConn, buffer)
+		// set timeout deadline
+		_ = client.peerConn.SetReadDeadline(time.Now().Add(10 * time.Second))
+		if client.peerConn == nil || client.peerAddr == nil {
+			return common.ClosedConnError
+		}
+		msg, _, err := util.ReadMessageUDP(client.peerConn)
 		// Clear Buffer
-		buffer = make([]byte, 4096)
-
-		client.logger.Info("UDP COMMAND HANDLER: ", msg.CommandCode, " ", msg.ErrorCode, " ", msg.Data, " ", addr.String())
+		//client.logger.Info("UDP COMMAND HANDLER: ", msg.CommandCode, " ", msg.ErrorCode, " ", msg.Data, " ", addr.String())
 		if err != nil {
 			client.logger.Error(err)
+			return err
 		}
 		command := common.CommandCodes[msg.CommandCode]
 		// TODO: Error handling
@@ -205,13 +216,19 @@ func (client *Client) UDPCommandHandler() (err error) {
 			}()
 		} else if command == common.File {
 			go func() {
+				// function pauses command handler
 				err = client.HandleGetFile()
 			}()
+		} else if command == common.Pause {
+			client.logger.Info("UDP command handler paused")
+			_ = <-client.peerChan
+			client.logger.Info("UDP command handler end pause")
+			continue
 		} else {
 			err = common.UnknownCommandError
 		}
 		if err != nil {
-			client.logger.Debug("UDP command handler error: ", command, string(msg.Data))
+			client.logger.Error("UDP command handler error: ", command, string(msg.Data))
 			client.logger.Error(err)
 		}
 	}
@@ -266,6 +283,13 @@ func (client *Client) Disconnect() (err error) {
 	client.conn = nil
 	client.logger.Debug("Disconnected")
 	return nil
+}
+
+func (client *Client) UDPDisconnect() (err error) {
+	_ = client.peerConn.Close()
+	client.peerAddr = nil
+	client.peerKey = ""
+	return err
 }
 
 // handleGetPubKey is called when the relay server requests this client's public key
@@ -428,9 +452,20 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 	client.logger.Debug("Sending file: ", fileName, " to ", client.peerAddr.String())
 	var command = common.File
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
-	defer delete(client.chanMap, command.String)
-
+	defer func() {
+		delete(client.chanMap, command.String)
+		client.peerChan <- 0
+	}()
+	if client.peerConn == nil || client.peerAddr == nil {
+		return common.ClosedConnError
+	}
+	// write init file command
 	if _, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, nil, nil, command); err != nil {
+		client.logger.Error("Error writing to peer")
+		return err
+	}
+	// pause UDP command handler of peer
+	if _, err = util.WriteMessageUDP(client.peerConn, client.peerAddr, nil, nil, common.Pause); err != nil {
 		client.logger.Error("Error writing to peer")
 		return err
 	}
@@ -455,11 +490,13 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 
 	//get TX privkey
 	privKey := client.privKey
-
+	client.logger.Debug(client.peerAddr)
 	// encrypt and send file
-	err = chunk.EncryptUDP(client.peerConn, client.peerAddr, pubKey, privKey)
+	// EncryptFileUDP needs command handler to be paused
+	err = chunk.EncryptFileUDP(client.peerConn, client.peerAddr, pubKey, privKey)
 	if err != nil {
 		client.logger.Error("Error encrypting file")
+		client.logger.Error(err)
 		return err
 	}
 	return err
@@ -470,8 +507,14 @@ func (client *Client) HandleGetFile() (err error) {
 	client.logger.Debug("Preparing to receive file")
 	var command = common.File
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
-	defer delete(client.chanMap, command.String)
-	// setup, decrypt
+	defer func() {
+		delete(client.chanMap, command.String)
+		// reopen udp command handler
+		client.peerChan <- 0
+		// write quit command to  peer
+		_, _ = util.WriteMessageUDP(client.peerConn, client.peerAddr, nil, nil, common.Quit)
+	}()
+
 	chunk, err := cryptography.DecryptSetup()
 	if err != nil {
 		client.logger.Error("Error setting up decryption")
@@ -488,12 +531,14 @@ func (client *Client) HandleGetFile() (err error) {
 	privKey := client.privKey
 
 	// store file in downloads
-	err = chunk.Decrypt(client.chanMap[command.String], pubKey, privKey)
+	err = chunk.DecryptFileUDP(client.peerConn, client.peerAddr, pubKey, privKey)
 	if err != nil {
 		client.logger.Error("Error decrypting file")
 		return err
 	}
 	client.logger.Debug("End receiving file")
+	// unpause command handler
+
 	return err
 }
 
@@ -616,22 +661,44 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 		return err
 	}
 
-	client.logger.Info("Peer public Address: ", remote)
-
+	client.logger.Info("Peer remote Address: ", remote)
+	client.logger.Info("Peer local Address: ", local)
 	// Resolve local address
 	lAddr, err := net.ResolveUDPAddr("udp", lAddrString)
-
 	if err != nil {
 		client.logger.Debug(err)
 		return err
 	}
-
 	client.peerConn, err = net.ListenUDP("udp", lAddr)
-	client.peerAddr, err = net.ResolveUDPAddr("udp", remote)
 	if err != nil {
 		client.logger.Debug(err)
 		return err
 	}
+	var wg sync.WaitGroup
+	go func() {
+		wg.Add(1)
+		msg, addr, _ := util.ReadMessageUDP(client.peerConn)
+		client.peerAddr = addr
+		client.logger.Debug(msg.CommandCode)
+		client.logger.Debug(client.peerAddr)
+		wg.Done()
+	}()
+	remotePeerAddr, err := net.ResolveUDPAddr("udp", remote)
+	if err != nil {
+		client.logger.Debug(err)
+		//return err
+	}
+	localPeerAddr, err := net.ResolveUDPAddr("udp", local)
+	if err != nil {
+		client.logger.Debug(err)
+		//return err
+	}
+	time.Sleep(500 * time.Millisecond)
+	_, _ = util.WriteMessageUDP(client.peerConn, remotePeerAddr, nil, nil, common.Connect)
+	_, _ = util.WriteMessageUDP(client.peerConn, localPeerAddr, nil, nil, common.Connect)
+	client.logger.Info("HERE")
+
+	wg.Wait()
 	return err
 
 }
