@@ -43,18 +43,18 @@ func main() {
 	default:
 		logLevel = log.WARNING
 	}
-	log.Init(os.Stdout, logLevel)
 
+	logger := log.NewLogger(os.Stdout, logLevel, "CLIENT ")
 	var cli *client.Client
 	var err error
 
 	// Read configurations
-	if cli, err = client.ReadConfig(*confPath); err != nil {
-		log.Warning("Could not read config, trying default config")
-		cli = client.InitConfig()
+	if cli, err = client.ReadConfig(*confPath, logger); err != nil {
+		logger.Warning("Could not read config, trying default config")
+		cli = client.InitConfig(logger)
 		if err := util.WriteConfig(*confPath, cli); err != nil {
-			log.Debug(err)
-			log.Warning("Could not save config")
+			logger.Debug(err)
+			logger.Warning("Could not save config")
 		}
 	}
 
@@ -71,13 +71,13 @@ func main() {
 	if 0 < *serverPortFlag && *serverPortFlag < 65536 {
 		cli.ServerPort = uint16(*serverPortFlag)
 	} else if *serverPortFlag != 0 {
-		log.Fatal("Provided port out of range")
+		logger.Fatal("Provided port out of range")
 		os.Exit(1)
 	}
 	if 0 < *localPortFlag && *localPortFlag < 65536 {
 		cli.LocalPort = uint16(*localPortFlag)
 	} else if *localPortFlag != 0 {
-		log.Fatal("Provided port out of range")
+		logger.Fatal("Provided port out of range")
 		os.Exit(1)
 	}
 

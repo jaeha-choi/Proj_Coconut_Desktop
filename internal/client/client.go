@@ -294,7 +294,7 @@ func (client *Client) UDPDisconnect() (err error) {
 
 // handleGetPubKey is called when the relay server requests this client's public key
 func (client *Client) handleGetPubKey() (err error) {
-	client.logger.Debug("Enter handleGetPubKey")
+	client.logger.Debug("handleGetPubKey")
 	var command = common.RequestPubKey
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer func() {
@@ -319,6 +319,7 @@ func (client *Client) handleGetPubKey() (err error) {
 // then save it as fileName
 // Returns common.ClientNotFoundError if no client is found
 func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err error) {
+	client.logger.Debug("request pubkey ", rxAddCodeStr)
 	var command = common.RequestPubKey
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
@@ -696,7 +697,6 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 	time.Sleep(500 * time.Millisecond)
 	_, _ = util.WriteMessageUDP(client.peerConn, remotePeerAddr, nil, nil, common.Connect)
 	_, _ = util.WriteMessageUDP(client.peerConn, localPeerAddr, nil, nil, common.Connect)
-	client.logger.Info("HERE")
 
 	wg.Wait()
 	return err
