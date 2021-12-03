@@ -424,6 +424,15 @@ func (ui *UIStatus) handleAddCodeDone(entry *gtk.Entry, event *gdk.Event) {
 		entry.SetText("")
 		// TODO: Get pubkey based on intVal
 		log.Debug(intVal)
+		go func() {
+			_ = glib.IdleAdd(func() {
+				if err = ui.client.DoRequestPubKey(strconv.FormatInt(intVal, 10), strconv.FormatInt(intVal, 10)+".key"); err != nil {
+					log.Error(err)
+					log.Error("Error retrieving pubkey")
+					return
+				}
+			})
+		}()
 	}
 }
 

@@ -333,9 +333,18 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 		return err
 	}
 	msg := <-client.chanMap[command.String]
+	log.Debug(msg)
+	if msg.ErrorCode != 0 {
+		log.Error(err)
+		return err
+	}
 	client.peerKey = string(msg.Data)
 	// Get rxPubKeyBytes
 	msg = <-client.chanMap[command.String]
+	if msg.ErrorCode != 0 {
+		log.Error(err)
+		return err
+	}
 	// DO NOT CHANGE PERMISSION BITS
 	f, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
 	if err != nil {
