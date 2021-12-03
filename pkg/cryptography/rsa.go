@@ -12,7 +12,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 const (
@@ -70,7 +69,7 @@ func OpenPrivKey(keyPath string, keyFileN string) (privKey *rsa.PrivateKey, err 
 // - return err if not found
 func OpenKeysAsBlock(keyPath string, keyName string) (keyBlock *pem.Block, err error) {
 	keyF := filepath.Join(keyPath, keyName)
-	if _, err = os.Stat(keyF); os.IsNotExist(err) && strings.HasSuffix(keyName, ".priv") {
+	if _, err = os.Stat(keyF); os.IsNotExist(err) {
 		if err := os.MkdirAll(keyPath, os.ModePerm); err != nil {
 			log.Debug(err)
 			log.Error("Error while creating key directory")
