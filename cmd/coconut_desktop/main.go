@@ -63,10 +63,22 @@ func main() {
 		cli.ServerHost = *serverHostFlag
 	}
 	if *keyPathFlag != "" {
-		cli.KeyPath = *keyPathFlag
+		if _, err = os.Stat(*keyPathFlag); os.IsNotExist(err) {
+			if err = os.Mkdir(*keyPathFlag, 0777); err != nil {
+				cli.KeyPath = "./"
+			}
+		} else {
+			cli.KeyPath = *keyPathFlag
+		}
 	}
 	if *dataPathFlag != "" {
-		cli.DataPath = *dataPathFlag
+		if _, err = os.Stat(*dataPathFlag); os.IsNotExist(err) {
+			if err = os.Mkdir(*dataPathFlag, 0777); err != nil {
+				cli.DataPath = "./"
+			}
+		} else {
+			cli.DataPath = *dataPathFlag
+		}
 	}
 	if 0 < *serverPortFlag && *serverPortFlag < 65536 {
 		cli.ServerPort = uint16(*serverPortFlag)
