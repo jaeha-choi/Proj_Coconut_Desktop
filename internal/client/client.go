@@ -187,7 +187,7 @@ func (client *Client) commandHandler() {
 func (client *Client) UDPCommandHandler() (err error) {
 	client.logger.Debug("Entering UDP Command Handler")
 	defer func() {
-		_ = client.UDPDisconnect()
+		client.UDPDisconnect()
 	}()
 	// make channel for pause command
 	for {
@@ -286,11 +286,11 @@ func (client *Client) Disconnect() (err error) {
 	return nil
 }
 
-func (client *Client) UDPDisconnect() (err error) {
+func (client *Client) UDPDisconnect() {
 	_ = client.peerConn.Close()
 	client.peerAddr = nil
 	client.peerKey = ""
-	return err
+	return
 }
 
 // handleGetPubKey is called when the relay server requests this client's public key
@@ -467,7 +467,7 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer func() {
 		delete(client.chanMap, command.String)
-		client.peerChan <- 0
+		//client.peerChan <- 0
 	}()
 	if client.peerConn == nil || client.peerAddr == nil {
 		return common.ClosedConnError
@@ -512,9 +512,9 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 		return err
 	}
 	client.logger.Debug("Finish Sending ", fileName)
-	err = client.UDPDisconnect()
+	//client.UDPDisconnect()
 	//err = client.Connect()
-	return err
+	return nil
 }
 
 // HandleGetFile receives and decrypts the specified file using private key

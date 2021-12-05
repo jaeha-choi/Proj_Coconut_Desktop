@@ -625,7 +625,6 @@ func (ui *UIStatus) handleSendFile() {
 					log.Error(err)
 					log.Error("Error sending file")
 				}
-				log.Debug("here")
 				if err = ui.removeFile(filePath, iter, fileList); err != nil {
 					return
 				}
