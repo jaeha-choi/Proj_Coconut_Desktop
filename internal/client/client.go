@@ -194,9 +194,11 @@ func (client *Client) UDPCommandHandler() (err error) {
 		// set timeout deadline
 		_ = client.peerConn.SetReadDeadline(time.Now().Add(10 * time.Second))
 		if client.peerConn == nil || client.peerAddr == nil {
+			log.Debug("PeerConn: ", client.peerConn, ", PeerAddr: ", client.peerAddr)
 			return common.ClosedConnError
 		}
 		msg, _, err := util.ReadMessageUDP(client.peerConn)
+		log.Debug(msg)
 		// Clear Buffer
 		//client.logger.Info("UDP COMMAND HANDLER: ", msg.CommandCode, " ", msg.ErrorCode, " ", msg.Data, " ", addr.String())
 		if err != nil {
@@ -241,8 +243,7 @@ func (client *Client) Connect() (err error) {
 		// Client already established active connection
 		return common.ExistingConnError
 	}
-	client.logger.Debug("Connecting...")
-	// TODO: Double check if resolving is necessary
+	client.logger.Debug("Connecting to server...")
 	resolvedHost, err := net.ResolveIPAddr("ip", client.ServerHost)
 	if err != nil {
 		return err
@@ -318,12 +319,12 @@ func (client *Client) handleGetPubKey() (err error) {
 // DoRequestPubKey signals the relay server to send public key associated with provided Add Code (rxAddCodeStr),
 // then save it as fileName
 // Returns common.ClientNotFoundError if no client is found
-func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err error) {
+func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string, firstName string, lastName string) (err error) {
 	client.logger.Debug("request pubkey ", rxAddCodeStr)
 	var command = common.RequestPubKey
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer delete(client.chanMap, command.String)
-
+	//file := strings.ReplaceAll(fileName, " ", "")
 	// write init command to server
 	if _, err = util.WriteMessage(client.conn, nil, nil, command); err != nil {
 		return err
@@ -332,8 +333,9 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 	if _, err = util.WriteMessage(client.conn, []byte(rxAddCodeStr), nil, command); err != nil {
 		return err
 	}
+	// get rxPubKeyHash
 	msg := <-client.chanMap[command.String]
-	log.Debug(msg)
+	log.Debug(string(msg.Data))
 	if msg.ErrorCode != 0 {
 		log.Error(err)
 		return err
@@ -345,26 +347,27 @@ func (client *Client) DoRequestPubKey(rxAddCodeStr string, fileName string) (err
 		log.Error(err)
 		return err
 	}
+	if msg.Data == nil {
+		log.Error(common.GeneralServerError)
+		return common.GeneralServerError
+	}
 	// DO NOT CHANGE PERMISSION BITS
-	f, err := os.OpenFile(fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+	f, err := os.OpenFile(client.KeyPath+fileName, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
 	if err != nil {
 		log.Debug(err)
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		_ = f.Close()
+	}()
 	_, err = f.Write(msg.Data)
 	if err != nil {
 		return err
 	}
-	//client.contactMap[client.peerKey].PubKeyFile = fileName
-	//if err = os.WriteFile(fileName, msg.Data, 0x777); err != nil {
-	//	return err
-	//}
-	//if err = cryptography.BytesToPemFile(msg.Data, fileName); err != nil {
-	//	return err
-	//}
 
-	//msg = <-client.chanMap[command.String]
+	// add contact to contacts list
+	client.addContact(firstName, lastName, []byte(client.peerKey), client.KeyPath+fileName)
+
 	return client.getResult(command)
 }
 
@@ -500,7 +503,6 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 
 	//get TX privkey
 	privKey := client.privKey
-	client.logger.Debug(client.peerAddr)
 	// encrypt and send file
 	// EncryptFileUDP needs command handler to be paused
 	err = chunk.EncryptFileUDP(client.peerConn, client.peerAddr, pubKey, privKey)
@@ -509,6 +511,9 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 		client.logger.Error(err)
 		return err
 	}
+	client.logger.Debug("Finish Sending ", fileName)
+	err = client.UDPDisconnect()
+	//err = client.Connect()
 	return err
 }
 
@@ -604,7 +609,6 @@ func (client *Client) HandleRequestP2P() (err error) {
 }
 
 // DoRequestP2P signals the relay server that a client wants to connect to another client
-// TODO: WIP
 func (client *Client) DoRequestP2P(pkHash []byte) (err error) {
 	// Init
 	var command = common.RequestP2P

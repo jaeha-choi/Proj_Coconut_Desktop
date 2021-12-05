@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -29,7 +30,6 @@ const (
 // Contact tree view index
 const (
 	keyName = iota
-	keyDate
 	keyFingerprint
 )
 
@@ -45,6 +45,7 @@ type UIStatus struct {
 	totalFileSize  int64
 	totalFileCount int
 	fileMap        map[string]struct{}
+	keyMap         map[string]struct{}
 	client         *Client
 }
 
@@ -59,10 +60,11 @@ func initUIStatus() (stat *UIStatus) {
 		isFileTab:      true,
 		onlineStatus:   false,
 		fileListOrder:  []int{fileNameIdx, fileSizeWithUnitIdx, fileStatusIdx, fileFullPath, fileSizeInBytes},
-		keyListOrder:   []int{keyName, keyDate, keyFingerprint},
+		keyListOrder:   []int{keyName, keyFingerprint},
 		totalFileSize:  0,
 		totalFileCount: 0,
 		fileMap:        map[string]struct{}{},
+		keyMap:         map[string]struct{}{},
 		client:         nil,
 	}
 }
@@ -91,18 +93,25 @@ func Start(uiGladePath string, client *Client) {
 	application.Connect("activate", func() {
 		var err error
 		// Open RSA Keys
+		// open or generate keys
+		_, err = cryptography.OpenKeysAsBlock(client.KeyPath, "key.priv")
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
 		pubBlock, err := cryptography.OpenKeysAsBlock(client.KeyPath, "key.pub")
+		if err != nil {
+			log.Fatal(err)
+			os.Exit(1)
+		}
 		//privBlock, err := cryptography.OpenPrivKey(client.KeyPath, "key.priv")
+		privKey, err := cryptography.OpenPrivKey(client.KeyPath, "key.priv")
 		if err != nil {
 			log.Fatal(err)
 			os.Exit(1)
 		}
+		stat.client.privKey = privKey
 		stat.client.pubKeyBlock = pubBlock
-		if err != nil {
-			log.Fatal(err)
-			os.Exit(1)
-		}
-
 		// Get the GtkBuilder ui definition in the glade file.
 		stat.builder, err = gtk.BuilderNewFromFile(uiGladePath)
 		//stat.builder, err = gtk.BuilderNewFromString(uiString)
@@ -122,6 +131,7 @@ func Start(uiGladePath string, client *Client) {
 			"addCodeDone":        stat.handleAddCodeDone,
 			"clickEmptySpotFile": stat.handleClickEmptySpotFile,
 			"activateExpander":   stat.handleActivateExpander,
+			"sendFile":           stat.handleSendFile,
 		}
 		stat.builder.ConnectSignals(signals)
 
@@ -133,13 +143,16 @@ func Start(uiGladePath string, client *Client) {
 
 		// Show the Window and all of its components.
 		win.Show()
-
+		stat.handleShowContacts()
 		application.AddWindow(win)
 	})
 
 	// Connect function to application shutdown event
 	application.Connect("shutdown", func() {
 		log.Debug("Application shutdown...")
+		if err = client.WriteContactsFile(); err != nil {
+			log.Debug("Error writing contacts file")
+		}
 		// Close connection if not already
 		if stat.client.conn != nil {
 			if err = stat.client.Disconnect(); err != nil {
@@ -149,7 +162,6 @@ func Start(uiGladePath string, client *Client) {
 			}
 		}
 	})
-
 	// Launch the application
 	os.Exit(application.Run(nil))
 }
@@ -315,9 +327,9 @@ func (ui *UIStatus) handleActivateExpander(expander *gtk.Expander) {
 // If switched to Online, expander is no longer grayed out.
 // If switched to Offline, expander is grayed out.
 func (ui *UIStatus) handleStatusClick(_ *gtk.EventBox, event *gdk.Event) {
-	//log.Debug("Status label clicked")
+	log.Debug("Status label clicked")
 	eventButton := gdk.EventButtonNewFromEvent(event)
-	// If user right-clicks the status label
+	// If user left-clicks the status label
 	if eventButton.Button() == gdk.BUTTON_PRIMARY {
 		label, err := ui.getLabelWithId("connStatusLabel")
 		if err != nil {
@@ -401,12 +413,29 @@ func (ui *UIStatus) handleStatusClick(_ *gtk.EventBox, event *gdk.Event) {
 
 // handleAddCodeDone handles event when Add Code was entered
 // TODO: WIP
-func (ui *UIStatus) handleAddCodeDone(entry *gtk.Entry, event *gdk.Event) {
+func (ui *UIStatus) handleAddCodeDone(codeEntry *gtk.Entry, event *gdk.Event) {
 	log.Debug("addCodeDone called")
 	eventKey := gdk.EventKeyNewFromEvent(event)
 	key := eventKey.KeyVal()
 	if key == gdk.KEY_Return || key == gdk.KEY_KP_Enter {
-		text, err := entry.GetText()
+		obj, err := ui.getEntryWithId("fullName")
+		if err != nil {
+			return
+		}
+		name, err := obj.GetText()
+		if err != nil {
+			return
+		}
+		fullName := strings.ReplaceAll(name, " ", "")
+		firstLast := strings.Split(name, " ")
+		first, last := "", ""
+		if len(firstLast) < 2 {
+			last = ""
+		} else {
+			first = firstLast[0]
+			last = firstLast[1]
+		}
+		text, err := codeEntry.GetText()
 		if err != nil {
 			return
 		}
@@ -421,17 +450,15 @@ func (ui *UIStatus) handleAddCodeDone(entry *gtk.Entry, event *gdk.Event) {
 			return
 		}
 		popover.Popdown()
-		entry.SetText("")
-		// TODO: Get pubkey based on intVal
-		log.Debug(intVal)
+		obj.SetText("")
+		codeEntry.SetText("")
 		go func() {
-			_ = glib.IdleAdd(func() {
-				if err = ui.client.DoRequestPubKey(strconv.FormatInt(intVal, 10), strconv.FormatInt(intVal, 10)+".key"); err != nil {
-					log.Error(err)
-					log.Error("Error retrieving pubkey")
-					return
-				}
-			})
+			if err = ui.client.DoRequestPubKey(strconv.FormatInt(intVal, 10), fullName+".key", first, last); err != nil {
+				log.Error(err)
+				log.Error("Error retrieving pubkey")
+				return
+			}
+			ui.handleShowContacts()
 		}()
 	}
 }
@@ -451,6 +478,35 @@ func (ui *UIStatus) handleClickEmptySpotFile(_ *gtk.EventBox, event *gdk.Event) 
 	}
 }
 
+func (ui *UIStatus) handleShowContacts() {
+	log.Debug("refresh contacts")
+	contactList, err := ui.getListStoreWithId("contactList")
+	if err != nil {
+		return
+	}
+	for key := range ui.client.contactMap {
+		// check if in exists
+		if _, exist := ui.keyMap[key]; exist {
+			continue
+		}
+		// Add to set
+		ui.keyMap[key] = struct{}{}
+
+		// get name of peer
+		first := ui.client.contactMap[key].FirstName
+		last := ui.client.contactMap[key].LastName
+		// add name and key to row
+		row := []interface{}{first + " " + last, key}
+		iter := contactList.Append()
+		// set row in list
+		err = contactList.Set(iter, ui.keyListOrder, row)
+		if err != nil {
+			log.Debug("Error while adding ", key)
+			continue
+		}
+	}
+}
+
 // handleKeyPressFileList handles event when key is pressed while FileList is focused.
 // If delete key is pressed, selected files are removed from the list.
 func (ui *UIStatus) handleKeyPressFileList(fileTreeView *gtk.TreeView, event *gdk.Event) {
@@ -464,6 +520,123 @@ func (ui *UIStatus) handleKeyPressFileList(fileTreeView *gtk.TreeView, event *gd
 			return
 		}
 	}
+}
+
+func (ui *UIStatus) handleSendFile() {
+	log.Debug("enter handle send file")
+	if !ui.onlineStatus {
+		log.Error("Not connected to server")
+		return
+	}
+	// check is files exist
+	// check for selected contact
+	if len(ui.fileMap) == 0 {
+		log.Debug("No files to send")
+		return
+	}
+	// get selected contact
+	contactTree, err := ui.getTreeViewWithId("contactListView")
+	if err != nil {
+		return
+	}
+	contactList, err := ui.getListStoreWithId("contactList")
+	if err != nil {
+		return
+	}
+	selectedContact, err := contactTree.GetSelection()
+	if err != nil {
+		log.Error(err)
+		log.Error("Not getting selected contact")
+		return
+	}
+	contact := selectedContact.GetSelectedRows(contactList)
+	if contact.Length() == 0 {
+		log.Debug("No contact selected")
+		return
+	}
+
+	// get selected files
+	fileTree, err := ui.getTreeViewWithId("fileListView")
+	if err != nil {
+		return
+	}
+	fileList, err := ui.getListStoreWithId("fileList")
+	if err != nil {
+		return
+	}
+	selectedFiles, err := fileTree.GetSelection()
+	if err != nil {
+		log.Error("Error getting selection")
+		return
+	}
+	files := selectedFiles.GetSelectedRows(fileList)
+	go func() {
+		contact.Foreach(func(item interface{}) {
+			// get hash of peer
+			c, err := isTreePath(item)
+			if err != nil {
+				return
+			}
+			iter, err := contactList.GetIter(c)
+			if err != nil {
+				log.Error("Contact name error")
+				return
+			}
+			valueHash, err := contactList.GetValue(iter, keyFingerprint)
+			if err != nil {
+				log.Error("Error getting value")
+				return
+			}
+			contactHash, err := valueHash.GetString()
+			if err != nil {
+				log.Error("Contact hash error")
+				return
+			}
+			log.Debug("Contact Hash: ", contactHash)
+			files.Foreach(func(item2 interface{}) {
+				// request p2p connection with peer
+				f, err := isTreePath(item2)
+				if err != nil {
+					return
+				}
+				iter, err := fileList.GetIter(f)
+				if err != nil {
+					log.Error("Error getting iterator")
+					return
+				}
+				if err = fileList.SetValue(iter, fileStatusIdx, "Sending..."); err != nil {
+					return
+				}
+				err = ui.client.DoRequestP2P([]byte(contactHash))
+				if err != nil {
+					log.Error("Error connecting to peer")
+				}
+				valuePath, err := fileList.GetValue(iter, fileFullPath)
+				if err != nil {
+					log.Error("Error getting file path")
+					return
+				}
+				filePath, err := valuePath.GetString()
+				if err != nil {
+					log.Error("Error getting file path string")
+				}
+				log.Debug("File path: ", filePath)
+				if err = ui.client.DoSendFile(filePath); err != nil { // not returning from function
+					log.Error(err)
+					log.Error("Error sending file")
+				}
+				log.Debug("here")
+				if err = ui.removeFile(filePath, iter, fileList); err != nil {
+					return
+				}
+
+			})
+
+		})
+	}()
+
+	// doRequestP2P
+	// doSendFile
 }
 
 // unselectAll deselects selections in treeView
@@ -548,6 +721,37 @@ func (ui *UIStatus) removeSelectedFiles(fileTreeView *gtk.TreeView) (err error) 
 		ui.totalFileCount -= 1
 	})
 
+	// Update InfoBox with new file count/size values
+	ui.updateInfoBox()
+	return nil
+}
+
+func (ui *UIStatus) removeFile(filePath string, iter *gtk.TreeIter, fileList *gtk.ListStore) (err error) {
+	log.Debug("enter remove file ", filePath)
+	value, err := fileList.GetValue(iter, fileSizeInBytes)
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while getting value from GetValue")
+		return
+	}
+	goValue, err := value.GoValue()
+	if err != nil {
+		log.Debug(err)
+		log.Error("Error while getting value from GoValue")
+		return
+	}
+	// Get file size in bytes
+	size, ok := goValue.(int64)
+	if !ok {
+		log.Debug(AssertFailed)
+		log.Error("Returned value is not int64")
+		return
+	}
+	delete(ui.fileMap, filePath)
+	_ = fileList.Remove(iter)
+	// Update total file info
+	ui.totalFileSize -= size
+	ui.totalFileCount -= 1
 	// Update InfoBox with new file count/size values
 	ui.updateInfoBox()
 	return nil
@@ -785,6 +989,40 @@ func (ui *UIStatus) getGridWithId(gridId string) (grid *gtk.Grid, err error) {
 	}
 	log.Debug(AssertFailed)
 	log.Error("object is not an grid")
+	return nil, AssertFailed
+}
+
+// getEntryWithId returns Entry with a provided id. If found, err != nil.
+func (ui *UIStatus) getEntryWithId(entryId string) (entry *gtk.Entry, err error) {
+	object, err := ui.builder.GetObject(entryId)
+	if err != nil {
+		log.Debug(err)
+		log.Errorf("Error while getting entry with entry id: %s", entryId)
+		return nil, err
+	}
+	entry, ok := object.(*gtk.Entry)
+	if ok {
+		return entry, nil
+	}
+	log.Debug(AssertFailed)
+	log.Error("object is not an entry")
+	return nil, AssertFailed
+}
+
+// getTreeViewColumnWithId returns TreeViewColumn with a provided id. If found, err != nil.
+func (ui *UIStatus) getTreeViewColumnWithId(columnId string) (column *gtk.TreeViewColumn, err error) {
+	object, err := ui.builder.GetObject(columnId)
+	if err != nil {
+		log.Debug(err)
+		log.Errorf("Error while getting column with column id: %s", columnId)
+		return nil, err
+	}
+	column, ok := object.(*gtk.TreeViewColumn)
+	if ok {
+		return column, nil
+	}
+	log.Debug(AssertFailed)
+	log.Error("object is not an entry")
 	return nil, AssertFailed
 }
 

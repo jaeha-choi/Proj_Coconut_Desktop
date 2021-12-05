@@ -13,7 +13,7 @@ func initClient(keyN string, log *log.Logger) Client {
 	client := InitConfig(log)
 	//client.KeyPath = "/home/duncan/projects/Proj_Coconut_Desktop"
 	client.ServerHost = "coconut-demo.jaeha.dev"
-	pubBlock, err := cryptography.OpenKeysAsBlock(client.KeyPath, keyN+".pub")
+	_, err := cryptography.OpenKeysAsBlock(client.KeyPath, keyN+".priv")
 	if err != nil {
 		log.Error(err)
 	}
@@ -21,8 +21,15 @@ func initClient(keyN string, log *log.Logger) Client {
 	if err != nil {
 		log.Error(err)
 	}
+	pubBlock, err := cryptography.OpenKeysAsBlock(client.KeyPath, keyN+".pub")
+	if err != nil {
+		log.Error(err)
+	}
 	client.pubKeyBlock = pubBlock
 	client.privKey = privBlock
+	if client.pubKeyBlock == nil || client.privKey == nil {
+		log.Error("Keys not generated")
+	}
 	return *client
 }
 
@@ -105,13 +112,13 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 		client.logger.Info("server add code: ", server.addCode)
 		time.Sleep(5 * time.Second)
 		client.logger.Info("requesting server pubkey")
-		err = client.DoRequestPubKey(server.addCode, "server.key")
+		err = client.DoRequestPubKey(server.addCode, "server.key", "A", "B")
 		if err != nil {
 			client.logger.Error(err)
 		}
 		client.logger.Info("end request Pubkey")
 
-		client.addContact("jaeha", "choi", []byte(client.peerKey), "server.key")
+		//client.addContact("jaeha", "choi", []byte(client.peerKey), "server.key")
 
 		client.logger.Info("end")
 		time.Sleep(1 * time.Minute)
@@ -138,7 +145,7 @@ func TestDoOpenHolePunchLocalHost(t *testing.T) {
 			time.Sleep(500 * time.Millisecond)
 		}
 		server.logger.Info("client add code: ", client.addCode)
-		err = server.DoRequestPubKey(client.addCode, "client.key")
+		err = server.DoRequestPubKey(client.addCode, "client.key", "C", "D")
 		if err != nil {
 			server.logger.Error(err)
 		}
@@ -191,12 +198,12 @@ func TestClient_DoSendFile(t *testing.T) {
 	var peerCode string
 	client.logger.Debug(peerCode)
 
-	err = client.DoRequestPubKey(peerCode, "peer.key")
+	err = client.DoRequestPubKey(peerCode, "peer.key", "first", "last")
 	if err != nil {
 		client.logger.Error(err)
 	}
 
-	client.addContact("first", "last", []byte(client.peerKey), "peer.key")
+	//client.addContact("first", "last", []byte(client.peerKey), "peer.key")
 
 	time.Sleep(3 * time.Second)
 
@@ -217,7 +224,7 @@ func TestClient_DoSendFile(t *testing.T) {
 // Remote testing to get file from peer
 func TestPeer_HandleGetFile(t *testing.T) {
 	logger := log.NewLogger(os.Stdout, log.DEBUG, "CLIENT ")
-	client := initClient("keyJae", logger)
+	client := initClient("test_keys", logger)
 	_ = client.Connect()
 	defer func() {
 		err := client.Disconnect()
@@ -229,17 +236,18 @@ func TestPeer_HandleGetFile(t *testing.T) {
 	if err != nil {
 		return
 	}
-	var peerCode string
-	client.logger.Debug(peerCode)
+	client.addContact("first", "last", []byte("ea33KFjhETdP0ubCc8ZD6GF0jzvBzV0GTQdjSLihQus="), "../../data/keys/key.pub")
+	//var peerCode string
+	//client.logger.Debug(peerCode)
+	//
+	//err = client.DoRequestPubKey(peerCode, "peer.key")
+	//if err != nil {
+	//	client.logger.Error(err)
+	//}
+	//
 
-	err = client.DoRequestPubKey(peerCode, "peer.key")
-	if err != nil {
-		client.logger.Error(err)
-	}
-
-	client.addContact("first", "last", []byte(client.peerKey), "peer.key")
-	// command handler running in background
-	time.Sleep(1 * time.Minute)
+	//// command handler running in background
+	time.Sleep(5 * time.Minute)
 
 }
 

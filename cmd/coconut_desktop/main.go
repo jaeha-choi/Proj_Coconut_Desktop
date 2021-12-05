@@ -92,7 +92,10 @@ func main() {
 		logger.Fatal("Provided port out of range")
 		os.Exit(1)
 	}
-
+	// load contacts list
+	if err = cli.ReadContactsFile(); err != nil {
+		log.Error("Error reading contacts file")
+	}
 	client.Start("./data/ui/UI.glade", cli)
 	//client.Start(string(uiString))
 }

@@ -1,5 +1,5 @@
 server_host: coconut-demo.jaeha.dev
 server_port: 9129
 local_port: 10378
-key_path: ./data/keys
+key_path: ./data/keys/
 data_path: ./data/
