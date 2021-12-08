@@ -470,28 +470,6 @@ func ByteToUint16(b []byte) uint16 {
 	return binary.BigEndian.Uint16(b)
 }
 
-// writeSize converts packet size to byte and write to writer
-// Take a look at encoding/gob package or protocol buffers for a better performance.
-func writeSize(writer io.Writer, size uint32) (err error) {
-	// consider using array over slice for a better performance i.e: arr := [4]byte{}
-	if _, err = writer.Write(Uint32ToByte(size)); err != nil {
-		return err
-	}
-	return nil
-}
-
-func writeErrorCode(writer io.Writer, errorToWrite *common.Error) (err error) {
-	var code uint8 = 0
-	if errorToWrite != nil {
-		code = errorToWrite.ErrCode
-	}
-	// Write 1 byte of error code
-	if _, err = writer.Write([]byte{code}); err != nil {
-		return err
-	}
-	return nil
-}
-
 // readNString reads up to nth character. Maximum length should not exceed BufferSize.
 func readNString(reader io.Reader, n uint32) (string, error) {
 	if n > BufferSize {
