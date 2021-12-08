@@ -194,6 +194,7 @@ func (client *Client) UDPCommandHandler() (err error) {
 		// set timeout deadline
 		_ = client.peerConn.SetReadDeadline(time.Now().Add(10 * time.Second))
 		if client.peerConn == nil || client.peerAddr == nil {
+			log.Debug("Connection == nil")
 			log.Debug("PeerConn: ", client.peerConn, ", PeerAddr: ", client.peerAddr)
 			return common.ClosedConnError
 		}
@@ -467,7 +468,7 @@ func (client *Client) DoSendFile(fileName string) (err error) {
 	client.chanMap[command.String] = make(chan *util.Message, bufferSize)
 	defer func() {
 		delete(client.chanMap, command.String)
-		//client.peerChan <- 0
+		_ = client.Connect()
 	}()
 	if client.peerConn == nil || client.peerAddr == nil {
 		return common.ClosedConnError
@@ -777,6 +778,7 @@ func (client *Client) addContact(firstName string, lastName string, pkHash []byt
 		fileName,
 	}
 	client.contactMap[pkHashStr] = &contact
+	_ = client.WriteContactsFile()
 	return true
 }
 

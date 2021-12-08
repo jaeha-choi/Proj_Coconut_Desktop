@@ -534,6 +534,12 @@ func (ui *UIStatus) handleSendFile() {
 		log.Debug("No files to send")
 		return
 	}
+	button, err := ui.getButtonWithId("sendButton")
+	if err != nil {
+		return
+	}
+	button.SetSensitive(false)
+	defer button.SetSensitive(true)
 	// get selected contact
 	contactTree, err := ui.getTreeViewWithId("contactListView")
 	if err != nil {
