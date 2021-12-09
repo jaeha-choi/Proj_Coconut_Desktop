@@ -690,29 +690,35 @@ func (client *Client) openHolePunch(local string, remote string) (err error) {
 		return err
 	}
 	var wg sync.WaitGroup
+	var readErr error = nil
 	go func() {
 		wg.Add(1)
-		msg, addr, _ := util.ReadMessageUDP(client.peerConn)
+		_ = client.peerConn.SetReadDeadline(time.Now().Add(10 * time.Second))
+		_, addr, err := util.ReadMessageUDP(client.peerConn)
+		if err != nil {
+			readErr = err
+		}
 		client.peerAddr = addr
-		client.logger.Debug(msg.CommandCode)
-		client.logger.Debug(client.peerAddr)
+		client.logger.Debug("Connected to: ", client.peerAddr.String())
 		wg.Done()
 	}()
+	time.Sleep(500 * time.Millisecond)
 	remotePeerAddr, err := net.ResolveUDPAddr("udp", remote)
 	if err != nil {
 		client.logger.Debug(err)
-		//return err
+	} else {
+		_, _ = util.WriteMessageUDP(client.peerConn, remotePeerAddr, nil, nil, common.Connect)
 	}
 	localPeerAddr, err := net.ResolveUDPAddr("udp", local)
 	if err != nil {
 		client.logger.Debug(err)
-		//return err
+	} else {
+		_, _ = util.WriteMessageUDP(client.peerConn, localPeerAddr, nil, nil, common.Connect)
 	}
-	time.Sleep(500 * time.Millisecond)
-	_, _ = util.WriteMessageUDP(client.peerConn, remotePeerAddr, nil, nil, common.Connect)
-	_, _ = util.WriteMessageUDP(client.peerConn, localPeerAddr, nil, nil, common.Connect)
-
 	wg.Wait()
+	if readErr != nil {
+		return common.TimeoutError
+	}
 	return err
 
 }
@@ -740,6 +746,13 @@ func (client *Client) ReadContactsFile() (err error) {
 		client.logger.Debug(err)
 		client.logger.Error("Error decoding file: ", err)
 		return err
+	}
+	//verify contactMap key files
+	for contact := range client.contactMap {
+		if _, err := os.Stat(client.KeyPath + client.contactMap[contact].PubKeyFile); os.IsNotExist(err) {
+			client.logger.Debug(client.KeyPath + client.contactMap[contact].PubKeyFile)
+			delete(client.contactMap, contact)
+		}
 	}
 	return err
 }
